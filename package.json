@@ -6,6 +6,9 @@
   "icon": "extension-icon.png",
   "author": "cristian",
   "license": "MIT",
+  "platforms": [
+    "macOS"
+  ],
   "categories": [
     "System"
   ],
@@ -93,6 +96,7 @@
     "lint": "ray lint",
     "fix-lint": "ray lint --fix",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run && npm run build:native && ./assets/deskctl self-test"
+    "test": "vitest run && npm run build:native && ./assets/deskctl self-test",
+    "publish": "npx @raycast/api@latest publish"
   }
 }
