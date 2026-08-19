@@ -23,10 +23,13 @@ npm run dev
 | ------------------------- | --------------------------------------------------- |
 | `src/manage-desk.tsx`     | Full Raycast interface and action coordination.     |
 | `src/desk-menu.tsx`       | Persistent menu-bar status and common actions.      |
+| `src/desk-settings.tsx`   | Direct settings command.                             |
+| `src/settings-form.tsx`   | Settings validation and default restoration.        |
 | `src/quick-command.ts`    | Shared direct-command behavior.                     |
 | `src/native.ts`           | Native process execution and JSON event parsing.    |
-| `src/storage.ts`          | Presets, selected desk, and safety acknowledgement. |
+| `src/storage.ts`          | Settings, presets, selected desk, and safety state.  |
 | `src/model.ts`            | Pure configuration and height validation.           |
+| `src/diagnostics.ts`      | Bounded and redacted diagnostic logging.             |
 | `native/DeskBLE.swift`    | CoreBluetooth state machine and movement safety.    |
 | `scripts/build-native.sh` | Universal helper build and signing.                 |
 

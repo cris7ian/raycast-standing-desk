@@ -38,7 +38,7 @@ The Sit, Stand, Raise, Lower, Stop, Save Sit, and Save Stand entry points call s
 
 ### Domain and persistence
 
-`src/model.ts` validates configuration and target heights. `src/storage.ts` stores presets, the selected desk identifier, and the safety acknowledgement through Raycast `LocalStorage`.
+`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores presets, the selected desk identifier, and the safety acknowledgement through Raycast `LocalStorage`.
 
 ### Native process bridge
 
@@ -71,7 +71,7 @@ Movement also stops after cancellation, a stall, a Bluetooth error, or 45 second
 
 ## Failure boundaries
 
-- Raycast owns preferences, user feedback, and saved positions.
+- Raycast owns user feedback. The extension owns settings and saved positions.
 - The bridge owns process lifecycle and inter-process cancellation.
 - The helper owns protocol validation and emergency stop writes.
 - The physical controller remains the final stop mechanism.

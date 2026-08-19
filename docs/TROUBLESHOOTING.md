@@ -8,7 +8,7 @@
 4. Quit other desk-control applications.
 5. Use **Forget Connected Desk** before selecting another desk.
 
-The default scan matches Bluetooth names containing `Desk`. Change the name filter in Raycast preferences when necessary.
+The default scan matches Bluetooth names containing `Desk`. Open **Desk Settings** in **Manage Standing Desk** to change the filter.
 
 ## Bluetooth access is denied
 
@@ -18,9 +18,26 @@ If the helper is absent, run **Manage Standing Desk** once to trigger the permis
 
 ## Height has a constant offset
 
-Change **Base Height** in Raycast extension preferences. The default is `62 cm`.
+Change **Base Height** in **Desk Settings**. The default is `62 cm`.
 
 Measure the desktop surface at the lowest position. Use that measurement when the controller reports zero.
+
+## Settings prevent movement
+
+Open **Manage Standing Desk**, then open **Desk Settings**. Check these constraints:
+
+- Base Height must not exceed Minimum Height.
+- Minimum Height must be lower than Maximum Height.
+- Sit and Stand heights must remain inside the configured range.
+- Raise and Lower Step must be greater than `0 cm` and at most `20 cm`.
+
+Use **Restore Default Settings** when the saved values are not usable. This restores the `62–127 cm` range, `70 cm` Sit position, `110 cm` Stand position, and `1 cm` step.
+
+## Inspect diagnostic logs
+
+Open **Manage Standing Desk**, then select **Diagnostic Log**. The extension reveals `standing-desk.log` in Finder.
+
+The log stores native command starts, outcomes, and errors. It excludes the stored Bluetooth identifier and rotates after `256 KiB`.
 
 ## Desk stops before the target
 

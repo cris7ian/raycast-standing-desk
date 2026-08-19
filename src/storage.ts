@@ -1,5 +1,13 @@
 import { LocalStorage } from "@raycast/api";
-import { DEFAULT_SIT_HEIGHT, DEFAULT_STAND_HEIGHT } from "./model";
+import { logDiagnostic } from "./diagnostics";
+import {
+  defaultConfiguration,
+  DeskConfiguration,
+  DEFAULT_SIT_HEIGHT,
+  DEFAULT_STAND_HEIGHT,
+  validateConfiguration,
+  validateTarget,
+} from "./model";
 
 export type PresetName = "sit" | "stand";
 
@@ -8,7 +16,13 @@ const keys = {
   stand: "preset.stand",
   deskIdentifier: "desk.identifier",
   safetyAcknowledged: "safety.acknowledged",
+  configuration: "desk.configuration",
 } as const;
+
+export type DeskSettings = {
+  configuration: DeskConfiguration;
+  presets: Record<PresetName, number>;
+};
 
 export async function getPreset(name: PresetName): Promise<number> {
   const value = await LocalStorage.getItem<string>(keys[name]);
@@ -32,6 +46,60 @@ export async function savePreset(
   height: number,
 ): Promise<void> {
   await LocalStorage.setItem(keys[name], String(height));
+}
+
+export async function getConfiguration(): Promise<DeskConfiguration> {
+  const stored = await LocalStorage.getItem<string>(keys.configuration);
+  if (stored === undefined) return defaultConfiguration();
+
+  try {
+    const parsed = JSON.parse(stored) as DeskConfiguration;
+    return validateConfiguration(parsed);
+  } catch (error) {
+    const configuration = defaultConfiguration();
+    await LocalStorage.setItem(
+      keys.configuration,
+      JSON.stringify(configuration),
+    );
+    await logDiagnostic("warning", "settings.invalid-restored", {
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return configuration;
+  }
+}
+
+export async function saveConfiguration(
+  configuration: DeskConfiguration,
+): Promise<void> {
+  const validated = validateConfiguration(configuration);
+  await LocalStorage.setItem(keys.configuration, JSON.stringify(validated));
+  await logDiagnostic("info", "settings.saved", {
+    baseHeight: validated.baseHeight,
+    minimumHeight: validated.minimumHeight,
+    maximumHeight: validated.maximumHeight,
+    stepHeight: validated.stepHeight,
+  });
+}
+
+export async function saveSettings(settings: DeskSettings): Promise<void> {
+  const configuration = validateConfiguration(settings.configuration);
+  const sit = validateTarget(settings.presets.sit, configuration);
+  const stand = validateTarget(settings.presets.stand, configuration);
+  await Promise.all([
+    saveConfiguration(configuration),
+    savePreset("sit", sit),
+    savePreset("stand", stand),
+  ]);
+}
+
+export async function restoreDefaultSettings(): Promise<DeskSettings> {
+  const settings: DeskSettings = {
+    configuration: defaultConfiguration(),
+    presets: { sit: DEFAULT_SIT_HEIGHT, stand: DEFAULT_STAND_HEIGHT },
+  };
+  await saveSettings(settings);
+  await logDiagnostic("info", "settings.restored-defaults");
+  return settings;
 }
 
 export async function getDeskIdentifier(): Promise<string | undefined> {

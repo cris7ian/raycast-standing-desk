@@ -1,22 +1,14 @@
-import { environment, getPreferenceValues } from "@raycast/api";
+import { environment } from "@raycast/api";
 import { spawn } from "node:child_process";
 import { access, mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { logDiagnostic } from "./diagnostics";
+import { DeskConfiguration, validateTarget } from "./model";
 import {
-  DeskConfiguration,
-  parseHeight,
-  validateConfiguration,
-  validateTarget,
-} from "./model";
-import { getDeskIdentifier, saveDeskIdentifier } from "./storage";
-
-type Preferences = {
-  deskName: string;
-  baseHeight: string;
-  minimumHeight: string;
-  maximumHeight: string;
-  stepHeight: string;
-};
+  getConfiguration,
+  getDeskIdentifier,
+  saveDeskIdentifier,
+} from "./storage";
 
 export type NativeEvent = {
   event: "status" | "progress" | "complete" | "error";
@@ -33,19 +25,9 @@ const helperPath = path.join(environment.assetsPath, "deskctl");
 const stopRequestPath = path.join(environment.supportPath, "stop-request");
 const movementLockPath = path.join(environment.supportPath, "movement.lock");
 
-export function getConfiguration(): DeskConfiguration {
-  const preferences = getPreferenceValues<Preferences>();
-  return validateConfiguration({
-    deskName: preferences.deskName,
-    baseHeight: parseHeight(preferences.baseHeight, "Base Height"),
-    minimumHeight: parseHeight(preferences.minimumHeight, "Minimum Height"),
-    maximumHeight: parseHeight(preferences.maximumHeight, "Maximum Height"),
-    stepHeight: parseHeight(preferences.stepHeight, "Raise and Lower Step"),
-  });
-}
-
-async function commonArguments(): Promise<string[]> {
-  const configuration = getConfiguration();
+async function commonArguments(
+  configuration: DeskConfiguration,
+): Promise<string[]> {
   const identifier = await getDeskIdentifier();
   const args = [
     "--name",
@@ -71,15 +53,27 @@ async function runNative(
   command: string,
   commandArguments: string[] = [],
   onEvent?: (event: NativeEvent) => void,
+  configuration?: DeskConfiguration,
 ): Promise<NativeEvent> {
-  await access(helperPath).catch(() => {
-    throw new Error(
+  await access(helperPath).catch(async () => {
+    const error = new Error(
       "The Bluetooth helper is missing. Run npm run build:native, then restart the extension.",
     );
+    await logDiagnostic("error", "native.helper-missing", { command });
+    throw error;
   });
   await mkdir(environment.supportPath, { recursive: true });
 
-  const args = [command, ...commandArguments, ...(await commonArguments())];
+  const activeConfiguration = configuration ?? (await getConfiguration());
+  const args = [
+    command,
+    ...commandArguments,
+    ...(await commonArguments(activeConfiguration)),
+  ];
+  await logDiagnostic("info", "native.started", {
+    command,
+    target: commandArguments[0],
+  });
   return new Promise((resolve, reject) => {
     const child = spawn(helperPath, args, {
       stdio: ["ignore", "pipe", "pipe"],
@@ -87,6 +81,7 @@ async function runNative(
     let stdoutBuffer = "";
     let stderr = "";
     let lastEvent: NativeEvent | undefined;
+    let lastProgressLogAt = 0;
 
     const acceptLine = (line: string) => {
       if (!line.trim()) return;
@@ -94,6 +89,23 @@ async function runNative(
         const event = JSON.parse(line) as NativeEvent;
         lastEvent = event;
         if (event.identifier) void saveDeskIdentifier(event.identifier);
+        const now = Date.now();
+        if (event.event !== "progress" || now - lastProgressLogAt >= 1_000) {
+          lastProgressLogAt = now;
+          void logDiagnostic(
+            event.event === "error" ? "error" : "info",
+            "native.event",
+            {
+              command,
+              event: event.event,
+              connected: event.connected,
+              heightCm: event.heightCm,
+              speed: event.speed,
+              outcome: event.outcome,
+              message: event.message,
+            },
+          );
+        }
         onEvent?.(event);
       } catch {
         stderr += `${line}\n`;
@@ -111,15 +123,28 @@ async function runNative(
     child.stderr.on("data", (chunk: string) => {
       stderr += chunk;
     });
-    child.on("error", reject);
+    child.on("error", (error) => {
+      void logDiagnostic("error", "native.spawn-failed", {
+        command,
+        message: error.message,
+      });
+      reject(error);
+    });
     child.on("close", (code) => {
       acceptLine(stdoutBuffer);
       if (code === 0 && lastEvent) {
+        void logDiagnostic("info", "native.completed", { command, code });
         resolve(lastEvent);
         return;
       }
       const fallbackMessage = `The Bluetooth helper exited without completing${code === null ? "." : ` (code ${code}).`}`;
-      reject(new Error(lastEvent?.message || stderr.trim() || fallbackMessage));
+      const message = lastEvent?.message || stderr.trim() || fallbackMessage;
+      void logDiagnostic("error", "native.failed", {
+        command,
+        code,
+        message,
+      });
+      reject(new Error(message));
     });
   });
 }
@@ -134,20 +159,21 @@ export async function moveDesk(
   targetHeight: number,
   onEvent?: (event: NativeEvent) => void,
 ): Promise<NativeEvent> {
-  const target = validateTarget(targetHeight, getConfiguration());
+  const configuration = await getConfiguration();
+  const target = validateTarget(targetHeight, configuration);
   await clearStopRequest();
-  return runNative("move", [String(target)], onEvent);
+  return runNative("move", [String(target)], onEvent, configuration);
 }
 
 export async function nudgeDesk(
   direction: "up" | "down",
   onEvent?: (event: NativeEvent) => void,
 ): Promise<NativeEvent> {
-  const configuration = getConfiguration();
+  const configuration = await getConfiguration();
   const delta =
     direction === "up" ? configuration.stepHeight : -configuration.stepHeight;
   await clearStopRequest();
-  return runNative("nudge", [String(delta)], onEvent);
+  return runNative("nudge", [String(delta)], onEvent, configuration);
 }
 
 export async function requestStop(): Promise<void> {

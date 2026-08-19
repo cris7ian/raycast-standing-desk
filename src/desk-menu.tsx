@@ -6,14 +6,14 @@ import {
   MenuBarExtra,
   Toast,
   launchCommand,
-  openExtensionPreferences,
+  showInFinder,
   showToast,
 } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
-import { formatHeight } from "./model";
+import { ensureDiagnosticLog } from "./diagnostics";
+import { defaultConfiguration, formatHeight } from "./model";
 import {
   NativeEvent,
-  getConfiguration,
   moveDesk,
   nudgeDesk,
   readDesk,
@@ -21,7 +21,12 @@ import {
   stopDesk,
 } from "./native";
 import { ensureSafetyAcknowledgement } from "./safety";
-import { getPresets, PresetName, savePreset } from "./storage";
+import {
+  getConfiguration,
+  getPresets,
+  PresetName,
+  savePreset,
+} from "./storage";
 
 type DeskState = {
   connected: boolean;
@@ -36,7 +41,7 @@ function errorMessage(error: unknown): string {
 }
 
 export default function Command() {
-  const configuration = getConfiguration();
+  const [configuration, setConfiguration] = useState(defaultConfiguration());
   const [desk, setDesk] = useState<DeskState>(initialDeskState);
   const [presets, setPresets] = useState({ sit: 70, stand: 110 });
   const [isLoading, setIsLoading] = useState(true);
@@ -56,10 +61,12 @@ export default function Command() {
     setIsLoading(true);
     setStatusError(undefined);
     try {
-      const [savedPresets, event] = await Promise.all([
+      const [savedConfiguration, savedPresets, event] = await Promise.all([
+        getConfiguration(),
         getPresets(),
         readDesk(acceptEvent),
       ]);
+      setConfiguration(savedConfiguration);
       setPresets(savedPresets);
       acceptEvent(event);
     } catch (error) {
@@ -323,8 +330,20 @@ export default function Command() {
         />
         <MenuBarExtra.Item
           icon={Icon.Gear}
-          title="Preferences…"
-          onAction={() => void openExtensionPreferences()}
+          title="Desk Settings…"
+          onAction={() =>
+            void launchCommand({
+              name: "desk-settings",
+              type: LaunchType.UserInitiated,
+            })
+          }
+        />
+        <MenuBarExtra.Item
+          icon={Icon.Document}
+          title="Show Diagnostic Log"
+          onAction={() =>
+            void ensureDiagnosticLog().then((logPath) => showInFinder(logPath))
+          }
         />
       </MenuBarExtra.Section>
     </MenuBarExtra>

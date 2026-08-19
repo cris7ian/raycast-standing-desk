@@ -34,7 +34,7 @@ height_cm = base_height_cm + raw_height / 100
 raw_target = round((target_height_cm - base_height_cm) * 100)
 ```
 
-The default base height is `62 cm`. Change it in Raycast preferences when the displayed height has a constant offset.
+The default base height is `62 cm`. Change it in **Desk Settings** when the displayed height has a constant offset.
 
 Bytes three and four contain signed little-endian speed. The helper divides the raw value by 100 before reporting it.
 

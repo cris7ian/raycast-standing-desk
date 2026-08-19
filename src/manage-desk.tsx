@@ -7,15 +7,21 @@ import {
   Keyboard,
   List,
   Toast,
-  openExtensionPreferences,
+  showInFinder,
   showToast,
   useNavigation,
 } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
+import { ensureDiagnosticLog } from "./diagnostics";
 import { ensureSafetyAcknowledgement } from "./safety";
-import { formatHeight, parseHeight, validateTarget } from "./model";
 import {
-  getConfiguration,
+  defaultConfiguration,
+  DeskConfiguration,
+  formatHeight,
+  parseHeight,
+  validateTarget,
+} from "./model";
+import {
   moveDesk,
   NativeEvent,
   nudgeDesk,
@@ -23,8 +29,11 @@ import {
   requestStop,
   stopDesk,
 } from "./native";
+import SettingsForm from "./settings-form";
 import {
+  DeskSettings,
   forgetDeskIdentifier,
+  getConfiguration,
   getPresets,
   PresetName,
   savePreset,
@@ -45,7 +54,7 @@ function errorMessage(error: unknown): string {
 }
 
 export default function Command() {
-  const configuration = getConfiguration();
+  const [configuration, setConfiguration] = useState(defaultConfiguration());
   const [desk, setDesk] = useState<DeskState>(initialDeskState);
   const [presets, setPresets] = useState({ sit: 70, stand: 110 });
   const [statusError, setStatusError] = useState<string>();
@@ -67,10 +76,12 @@ export default function Command() {
     setIsLoading(true);
     setStatusError(undefined);
     try {
-      const [savedPresets, event] = await Promise.all([
+      const [savedConfiguration, savedPresets, event] = await Promise.all([
+        getConfiguration(),
         getPresets(),
         readDesk(acceptEvent),
       ]);
+      setConfiguration(savedConfiguration);
       setPresets(savedPresets);
       acceptEvent(event);
     } catch (error) {
@@ -192,6 +203,23 @@ export default function Command() {
     await refresh();
   }
 
+  async function showDiagnosticLog() {
+    const logPath = await ensureDiagnosticLog();
+    await showInFinder(logPath);
+  }
+
+  function acceptSettings(settings: DeskSettings) {
+    setConfiguration(settings.configuration);
+    setPresets(settings.presets);
+  }
+
+  const settingsForm = (
+    <SettingsForm
+      initialSettings={{ configuration, presets }}
+      onSaved={acceptSettings}
+    />
+  );
+
   const sharedActions = (
     <>
       <Action
@@ -205,10 +233,15 @@ export default function Command() {
         shortcut={Keyboard.Shortcut.Common.Refresh}
         onAction={refresh}
       />
-      <Action
-        title="Open Extension Preferences"
+      <Action.Push
+        title="Desk Settings"
         icon={Icon.Gear}
-        onAction={openExtensionPreferences}
+        target={settingsForm}
+      />
+      <Action
+        title="Show Diagnostic Log"
+        icon={Icon.Document}
+        onAction={showDiagnosticLog}
       />
       <Action
         title="Forget Connected Desk"
@@ -253,10 +286,15 @@ export default function Command() {
                 icon={{ source: Icon.Stop, tintColor: Color.Red }}
                 onAction={performStop}
               />
-              <Action
-                title="Open Extension Preferences"
+              <Action.Push
+                title="Desk Settings"
                 icon={Icon.Gear}
-                onAction={openExtensionPreferences}
+                target={settingsForm}
+              />
+              <Action
+                title="Show Diagnostic Log"
+                icon={Icon.Document}
+                onAction={showDiagnosticLog}
               />
               <Action
                 title="Forget Connected Desk"
@@ -361,11 +399,45 @@ export default function Command() {
                 target={
                   <HeightForm
                     currentHeight={desk.height}
+                    configuration={configuration}
                     onMove={(height) =>
                       performMove(height, formatHeight(height))
                     }
                   />
                 }
+              />
+              {sharedActions}
+            </ActionPanel>
+          }
+        />
+      </List.Section>
+
+      <List.Section title="Settings and Diagnostics">
+        <List.Item
+          icon={Icon.Gear}
+          title="Desk Settings"
+          subtitle="Edit limits and positions, or restore defaults"
+          actions={
+            <ActionPanel>
+              <Action.Push
+                title="Open Desk Settings"
+                icon={Icon.Gear}
+                target={settingsForm}
+              />
+              {sharedActions}
+            </ActionPanel>
+          }
+        />
+        <List.Item
+          icon={Icon.Document}
+          title="Diagnostic Log"
+          subtitle="Show the persisted extension log in Finder"
+          actions={
+            <ActionPanel>
+              <Action
+                title="Show Diagnostic Log"
+                icon={Icon.Document}
+                onAction={showDiagnosticLog}
               />
               {sharedActions}
             </ActionPanel>
@@ -378,12 +450,13 @@ export default function Command() {
 
 function HeightForm({
   currentHeight,
+  configuration,
   onMove,
 }: {
   currentHeight?: number;
+  configuration: DeskConfiguration;
   onMove: (height: number) => Promise<void>;
 }) {
-  const configuration = getConfiguration();
   const { pop } = useNavigation();
   const [height, setHeight] = useState(
     currentHeight === undefined ? "" : currentHeight.toFixed(1),

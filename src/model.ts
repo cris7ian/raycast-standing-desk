@@ -9,6 +9,18 @@ export type DeskConfiguration = {
   stepHeight: number;
 };
 
+export const DEFAULT_CONFIGURATION: Readonly<DeskConfiguration> = {
+  deskName: "Desk",
+  baseHeight: 62,
+  minimumHeight: 62,
+  maximumHeight: 127,
+  stepHeight: 1,
+};
+
+export function defaultConfiguration(): DeskConfiguration {
+  return { ...DEFAULT_CONFIGURATION };
+}
+
 export function parseHeight(value: string, label: string): number {
   const parsed = Number(value.replace(",", "."));
   if (!Number.isFinite(parsed)) {
@@ -20,8 +32,22 @@ export function parseHeight(value: string, label: string): number {
 export function validateConfiguration(
   configuration: DeskConfiguration,
 ): DeskConfiguration {
-  if (!configuration.deskName.trim()) {
+  if (
+    typeof configuration.deskName !== "string" ||
+    !configuration.deskName.trim()
+  ) {
     throw new Error("Desk Bluetooth Name cannot be empty.");
+  }
+  const numericSettings: Array<[string, number]> = [
+    ["Base Height", configuration.baseHeight],
+    ["Minimum Height", configuration.minimumHeight],
+    ["Maximum Height", configuration.maximumHeight],
+    ["Raise and Lower Step", configuration.stepHeight],
+  ];
+  for (const [label, value] of numericSettings) {
+    if (!Number.isFinite(value)) {
+      throw new Error(`${label} must be a number.`);
+    }
   }
   if (configuration.minimumHeight >= configuration.maximumHeight) {
     throw new Error("Minimum Height must be lower than Maximum Height.");

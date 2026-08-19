@@ -9,48 +9,6 @@
   "categories": [
     "System"
   ],
-  "preferences": [
-    {
-      "name": "deskName",
-      "title": "Desk Bluetooth Name",
-      "description": "Text used to find the desk during first connection",
-      "type": "textfield",
-      "default": "Desk",
-      "required": true
-    },
-    {
-      "name": "baseHeight",
-      "title": "Base Height",
-      "description": "Height in centimeters when the controller reports zero",
-      "type": "textfield",
-      "default": "62",
-      "required": true
-    },
-    {
-      "name": "minimumHeight",
-      "title": "Minimum Height",
-      "description": "Lowest target that the extension can send, in centimeters",
-      "type": "textfield",
-      "default": "62",
-      "required": true
-    },
-    {
-      "name": "maximumHeight",
-      "title": "Maximum Height",
-      "description": "Highest target that the extension can send, in centimeters",
-      "type": "textfield",
-      "default": "127",
-      "required": true
-    },
-    {
-      "name": "stepHeight",
-      "title": "Raise and Lower Step",
-      "description": "Distance for the Raise and Lower commands, in centimeters",
-      "type": "textfield",
-      "default": "1",
-      "required": true
-    }
-  ],
   "commands": [
     {
       "name": "desk-menu",
@@ -63,6 +21,12 @@
       "name": "manage-desk",
       "title": "Manage Standing Desk",
       "description": "View the height and control every desk action",
+      "mode": "view"
+    },
+    {
+      "name": "desk-settings",
+      "title": "Desk Settings",
+      "description": "Edit desk limits and positions or restore safe defaults",
       "mode": "view"
     },
     {
