@@ -6,6 +6,10 @@ This repository contains a Raycast extension and a native macOS Bluetooth helper
 
 Read `docs/ARCHITECTURE.md` before changing component boundaries. Read `docs/SAFETY.md` before changing movement behavior.
 
+## Product naming
+
+The public extension name is **Standing Desk**. Use **IKEA IDÅSEN** only for verified hardware compatibility. Do not rename the extension to IDÅSEN Desk.
+
 ## Safety rules
 
 - Treat `move`, `nudge`, Sit, Stand, Raise, and Lower as physical actions.

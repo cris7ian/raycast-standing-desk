@@ -61,10 +61,10 @@ The `discover` operation runs for five seconds. It reports the remembered periph
 
 ## Movement sequence
 
-1. TypeScript validates the requested target.
-2. The bridge snapshots the selected desk and its validated configuration.
+1. The bridge publishes a unique movement request identifier before it awaits desk-bound state.
+2. The bridge loads validated configuration and snapshots the explicit desk selection.
 3. The bridge verifies the safety acknowledgement for that exact selection.
-4. The bridge publishes a unique movement request identifier.
+4. TypeScript validates the requested movement against the configured bounds.
 5. An active helper detects the new identifier and stops.
 6. The new helper waits up to five seconds for the movement lock.
 7. A superseded helper exits without connecting to the desk.

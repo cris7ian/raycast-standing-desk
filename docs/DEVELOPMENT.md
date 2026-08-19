@@ -26,9 +26,9 @@ npm run dev
 | `src/settings-form.tsx`   | Settings validation and default restoration.        |
 | `src/quick-command.ts`    | Shared direct-command behavior.                     |
 | `src/native.ts`           | Native process execution and JSON event parsing.    |
-| `src/storage.ts`          | Settings, presets, selected desk, and safety state.  |
+| `src/storage.ts`          | Settings, presets, selected desk, and safety state. |
 | `src/model.ts`            | Pure configuration and height validation.           |
-| `src/diagnostics.ts`      | Bounded and redacted diagnostic logging.             |
+| `src/diagnostics.ts`      | Bounded and redacted diagnostic logging.            |
 | `native/DeskBLE.swift`    | CoreBluetooth state machine and movement safety.    |
 | `scripts/build-native.sh` | Universal helper build and signing.                 |
 
@@ -109,3 +109,21 @@ Do not accept a major API update only because npm reports it as latest. Confirm 
 ## Continuous integration
 
 GitHub Actions runs the offline verification suite on macOS for pushes and pull requests. CI does not have a desk and must never attempt Bluetooth discovery.
+
+## Raycast Store release
+
+Treat every file in the working tree as publishable. Before publishing, inspect `git status --short`. Move unrelated untracked files outside the repository. Do not rely on `.gitignore` to exclude them from the Raycast publisher.
+
+Store screenshots belong in `metadata/`. Raycast accepts up to six screenshots and recommends at least three. Each screenshot must be a `2000 x 1250` PNG.
+
+Target approximately `12%` padding around the Raycast window. The current Store validator accepts `8%–17%` per side. It permits at most `4%` vertical or horizontal asymmetry.
+
+Use one background across the screenshot set. Do not include credentials, CoreBluetooth identifiers, or content from other applications.
+
+Run the complete verification suite, then publish:
+
+```sh
+npm run publish
+```
+
+Running the command again updates the existing open Store pull request.
