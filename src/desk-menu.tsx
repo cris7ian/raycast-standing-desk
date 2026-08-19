@@ -4,61 +4,110 @@ import {
   Keyboard,
   LaunchType,
   MenuBarExtra,
-  Toast,
   launchCommand,
   showInFinder,
-  showToast,
 } from "@raycast/api";
 import { useCallback, useEffect, useState } from "react";
 import { ensureDiagnosticLog } from "./diagnostics";
 import { defaultConfiguration, formatHeight } from "./model";
+import { NativeEvent, readDesk } from "./native";
 import {
-  NativeEvent,
-  moveDesk,
-  nudgeDesk,
-  readDesk,
-  requestStop,
-  stopDesk,
-} from "./native";
-import { ensureSafetyAcknowledgement } from "./safety";
-import {
+  CachedDeskStatus,
+  getCachedDeskStatus,
   getConfiguration,
   getPresets,
-  PresetName,
-  savePreset,
 } from "./storage";
 
 type DeskState = {
-  connected: boolean;
   height?: number;
   name?: string;
+  updatedAt?: number;
 };
 
-const initialDeskState: DeskState = { connected: false };
+type DeskStatusError = {
+  message: string;
+  occurredAt: number;
+};
+
+type DeskCommandName =
+  "sit" | "stand" | "raise" | "lower" | "stop" | "save-sit" | "save-stand";
+
+const initialDeskState: DeskState = {};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function deskStateFromCache(status: CachedDeskStatus): DeskState {
+  return {
+    height: status.heightCm,
+    name: status.deskName,
+    updatedAt: status.updatedAt,
+  };
+}
+
+function formatStatusAge(updatedAt: number): string {
+  const elapsedSeconds = Math.max(
+    0,
+    Math.floor((Date.now() - updatedAt) / 1_000),
+  );
+  if (elapsedSeconds < 10) return "Updated just now";
+  if (elapsedSeconds < 60) return `Updated ${elapsedSeconds}s ago`;
+  const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+  if (elapsedMinutes < 60) return `Updated ${elapsedMinutes}m ago`;
+  return `Updated at ${new Date(updatedAt).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+  })}`;
 }
 
 export default function Command() {
   const [configuration, setConfiguration] = useState(defaultConfiguration());
   const [desk, setDesk] = useState<DeskState>(initialDeskState);
   const [presets, setPresets] = useState({ sit: 70, stand: 110 });
-  const [isLoading, setIsLoading] = useState(true);
-  const [activity, setActivity] = useState<string>();
-  const [statusError, setStatusError] = useState<string>();
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [statusError, setStatusError] = useState<DeskStatusError>();
 
   const acceptEvent = useCallback((event: NativeEvent) => {
     if (event.event === "error") return;
     setDesk((current) => ({
-      connected: event.connected ?? current.connected,
       height: event.heightCm ?? current.height,
       name: event.deskName ?? current.name,
+      updatedAt: event.heightCm === undefined ? current.updatedAt : Date.now(),
     }));
   }, []);
 
+  const loadStoredState = useCallback(async () => {
+    try {
+      const [savedConfiguration, savedPresets, cachedStatus] =
+        await Promise.all([
+          getConfiguration(),
+          getPresets(),
+          getCachedDeskStatus(),
+        ]);
+      setConfiguration(savedConfiguration);
+      setPresets(savedPresets);
+      if (cachedStatus) {
+        setDesk(deskStateFromCache(cachedStatus));
+        setStatusError((current) =>
+          current && cachedStatus.updatedAt > current.occurredAt
+            ? undefined
+            : current,
+        );
+      }
+    } catch {
+      // Keep the safe defaults when local state cannot be read.
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadStoredState();
+    const timer = setInterval(() => void loadStoredState(), 2_000);
+    return () => clearInterval(timer);
+  }, [loadStoredState]);
+
   const refresh = useCallback(async () => {
-    setIsLoading(true);
+    setIsRefreshing(true);
     setStatusError(undefined);
     try {
       const [savedConfiguration, savedPresets, event] = await Promise.all([
@@ -70,151 +119,38 @@ export default function Command() {
       setPresets(savedPresets);
       acceptEvent(event);
     } catch (error) {
-      setStatusError(errorMessage(error));
-      setDesk((current) => ({ ...current, connected: false }));
+      setStatusError({ message: errorMessage(error), occurredAt: Date.now() });
     } finally {
-      setIsLoading(false);
+      setIsRefreshing(false);
     }
   }, [acceptEvent]);
 
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-
-  async function performMove(target: number, label: string) {
-    if (!(await ensureSafetyAcknowledgement())) return;
-
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: `Moving desk to ${label}`,
-      message: formatHeight(target),
-    });
-    setActivity(`Moving to ${label}`);
-    setStatusError(undefined);
-    try {
-      const event = await moveDesk(target, acceptEvent);
-      acceptEvent(event);
-      toast.style = Toast.Style.Success;
-      toast.title =
-        event.outcome === "stopped" ? "Desk stopped" : `Desk moved to ${label}`;
-      toast.message =
-        event.heightCm === undefined ? "" : formatHeight(event.heightCm);
-    } catch (error) {
-      const message = errorMessage(error);
-      setStatusError(message);
-      toast.style = Toast.Style.Failure;
-      toast.title = "Could not move desk";
-      toast.message = message;
-    } finally {
-      setActivity(undefined);
-    }
+  function launchDeskCommand(name: DeskCommandName): Promise<void> {
+    return launchCommand({ name, type: LaunchType.UserInitiated });
   }
 
-  async function performNudge(direction: "up" | "down") {
-    if (!(await ensureSafetyAcknowledgement())) return;
-
-    const label = direction === "up" ? "Raising desk" : "Lowering desk";
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: label,
-    });
-    setActivity(label);
-    setStatusError(undefined);
-    try {
-      const event = await nudgeDesk(direction, acceptEvent);
-      acceptEvent(event);
-      toast.style = Toast.Style.Success;
-      toast.title =
-        event.outcome === "stopped" ? "Desk stopped" : "Desk adjusted";
-      toast.message =
-        event.heightCm === undefined ? "" : formatHeight(event.heightCm);
-    } catch (error) {
-      const message = errorMessage(error);
-      setStatusError(message);
-      toast.style = Toast.Style.Failure;
-      toast.title = "Could not adjust desk";
-      toast.message = message;
-    } finally {
-      setActivity(undefined);
-    }
-  }
-
-  async function performStop() {
-    await requestStop();
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: "Stopping desk",
-    });
-    if (activity) {
-      toast.style = Toast.Style.Success;
-      toast.title = "Stop requested";
-      return;
-    }
-
-    setActivity("Stopping desk");
-    try {
-      const event = await stopDesk(acceptEvent);
-      acceptEvent(event);
-      toast.style = Toast.Style.Success;
-      toast.title = "Desk stopped";
-      toast.message =
-        event.heightCm === undefined ? "" : formatHeight(event.heightCm);
-    } catch (error) {
-      const message = errorMessage(error);
-      setStatusError(message);
-      toast.style = Toast.Style.Failure;
-      toast.title = "Could not contact desk";
-      toast.message = `${message} Use the physical control if needed.`;
-    } finally {
-      setActivity(undefined);
-    }
-  }
-
-  async function saveCurrentPosition(name: PresetName) {
-    const label = name === "sit" ? "Sit" : "Stand";
-    const toast = await showToast({
-      style: Toast.Style.Animated,
-      title: "Reading desk height",
-    });
-    setActivity(`Saving ${label}`);
-    setStatusError(undefined);
-    try {
-      const event = await readDesk(acceptEvent);
-      if (event.heightCm === undefined) {
-        throw new Error("The desk did not report its height.");
-      }
-      acceptEvent(event);
-      await savePreset(name, event.heightCm);
-      setPresets((current) => ({
-        ...current,
-        [name]: event.heightCm as number,
-      }));
-      toast.style = Toast.Style.Success;
-      toast.title = `Saved ${label} position`;
-      toast.message = formatHeight(event.heightCm);
-    } catch (error) {
-      const message = errorMessage(error);
-      setStatusError(message);
-      toast.style = Toast.Style.Failure;
-      toast.title = `Could not save ${label} position`;
-      toast.message = message;
-    } finally {
-      setActivity(undefined);
-    }
+  async function showDiagnosticLog(): Promise<void> {
+    const logPath = await ensureDiagnosticLog();
+    await showInFinder(logPath);
   }
 
   const topBarTitle =
     desk.height === undefined ? "Desk" : formatHeight(desk.height);
-  const statusTitle =
-    activity ?? (desk.connected ? "Connected" : "Desk unavailable");
-  const statusSubtitle = activity
-    ? desk.height === undefined
-      ? undefined
-      : formatHeight(desk.height)
-    : desk.connected
-      ? `${desk.name ?? "Desk"}${desk.height === undefined ? "" : ` · ${formatHeight(desk.height)}`}`
-      : statusError;
-  const actionsDisabled = activity !== undefined;
+  const hasCachedStatus =
+    desk.height !== undefined && desk.updatedAt !== undefined;
+  const statusTitle = isRefreshing
+    ? "Connecting to desk…"
+    : statusError
+      ? "Desk unavailable"
+      : hasCachedStatus
+        ? "Last known position"
+        : "Ready";
+  const statusSubtitle = statusError
+    ? statusError.message
+    : desk.height !== undefined && desk.updatedAt !== undefined
+      ? `${desk.name ?? "Desk"} · ${formatHeight(desk.height)} · ${formatStatusAge(desk.updatedAt)}`
+      : "Select a position or refresh the height";
+  const actionsDisabled = isRefreshing;
 
   return (
     <MenuBarExtra
@@ -222,19 +158,21 @@ export default function Command() {
       title={topBarTitle}
       tooltip={
         statusError
-          ? `Standing Desk: ${statusError}`
+          ? `Standing Desk: ${statusError.message}`
           : `Standing Desk${desk.height === undefined ? "" : ` · ${formatHeight(desk.height)}`}`
       }
-      isLoading={isLoading || actionsDisabled}
+      isLoading={isRefreshing}
     >
       <MenuBarExtra.Section>
         <MenuBarExtra.Item
           icon={
-            activity
+            isRefreshing
               ? Icon.CircleProgress
-              : desk.connected
-                ? { source: Icon.CheckCircle, tintColor: Color.Green }
-                : { source: Icon.WifiDisabled, tintColor: Color.Red }
+              : statusError
+                ? { source: Icon.WifiDisabled, tintColor: Color.Red }
+                : hasCachedStatus
+                  ? Icon.Clock
+                  : Icon.Desktop
           }
           title={statusTitle}
           subtitle={statusSubtitle}
@@ -248,9 +186,7 @@ export default function Command() {
           subtitle={formatHeight(presets.sit)}
           shortcut={{ modifiers: ["cmd"], key: "1" }}
           onAction={
-            actionsDisabled
-              ? undefined
-              : () => void performMove(presets.sit, "Sit")
+            actionsDisabled ? undefined : () => launchDeskCommand("sit")
           }
         />
         <MenuBarExtra.Item
@@ -259,9 +195,7 @@ export default function Command() {
           subtitle={formatHeight(presets.stand)}
           shortcut={{ modifiers: ["cmd"], key: "2" }}
           onAction={
-            actionsDisabled
-              ? undefined
-              : () => void performMove(presets.stand, "Stand")
+            actionsDisabled ? undefined : () => launchDeskCommand("stand")
           }
         />
       </MenuBarExtra.Section>
@@ -272,7 +206,9 @@ export default function Command() {
           title="Raise"
           subtitle={formatHeight(configuration.stepHeight)}
           shortcut={{ modifiers: ["cmd"], key: "arrowUp" }}
-          onAction={actionsDisabled ? undefined : () => void performNudge("up")}
+          onAction={
+            actionsDisabled ? undefined : () => launchDeskCommand("raise")
+          }
         />
         <MenuBarExtra.Item
           icon={Icon.ArrowDown}
@@ -280,14 +216,14 @@ export default function Command() {
           subtitle={formatHeight(configuration.stepHeight)}
           shortcut={{ modifiers: ["cmd"], key: "arrowDown" }}
           onAction={
-            actionsDisabled ? undefined : () => void performNudge("down")
+            actionsDisabled ? undefined : () => launchDeskCommand("lower")
           }
         />
         <MenuBarExtra.Item
           icon={{ source: Icon.Stop, tintColor: Color.Red }}
           title="Stop"
           shortcut={Keyboard.Shortcut.Common.Pin}
-          onAction={() => void performStop()}
+          onAction={() => launchDeskCommand("stop")}
         />
       </MenuBarExtra.Section>
 
@@ -297,9 +233,7 @@ export default function Command() {
             title="Save as Sit"
             subtitle={formatHeight(presets.sit)}
             onAction={
-              actionsDisabled
-                ? undefined
-                : () => void saveCurrentPosition("sit")
+              actionsDisabled ? undefined : () => launchDeskCommand("save-sit")
             }
           />
           <MenuBarExtra.Item
@@ -308,7 +242,7 @@ export default function Command() {
             onAction={
               actionsDisabled
                 ? undefined
-                : () => void saveCurrentPosition("stand")
+                : () => launchDeskCommand("save-stand")
             }
           />
         </MenuBarExtra.Submenu>
@@ -316,13 +250,13 @@ export default function Command() {
           icon={Icon.ArrowClockwise}
           title="Refresh Height"
           shortcut={Keyboard.Shortcut.Common.Refresh}
-          onAction={actionsDisabled ? undefined : () => void refresh()}
+          onAction={actionsDisabled ? undefined : refresh}
         />
         <MenuBarExtra.Item
           icon={Icon.AppWindow}
           title="Open Desk Manager"
           onAction={() =>
-            void launchCommand({
+            launchCommand({
               name: "manage-desk",
               type: LaunchType.UserInitiated,
             })
@@ -332,7 +266,7 @@ export default function Command() {
           icon={Icon.Gear}
           title="Desk Settings…"
           onAction={() =>
-            void launchCommand({
+            launchCommand({
               name: "desk-settings",
               type: LaunchType.UserInitiated,
             })
@@ -341,9 +275,7 @@ export default function Command() {
         <MenuBarExtra.Item
           icon={Icon.Document}
           title="Show Diagnostic Log"
-          onAction={() =>
-            void ensureDiagnosticLog().then((logPath) => showInFinder(logPath))
-          }
+          onAction={showDiagnosticLog}
         />
       </MenuBarExtra.Section>
     </MenuBarExtra>

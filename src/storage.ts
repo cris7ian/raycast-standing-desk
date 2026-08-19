@@ -15,6 +15,7 @@ const keys = {
   sit: "preset.sit",
   stand: "preset.stand",
   deskIdentifier: "desk.identifier",
+  deskStatus: "desk.status",
   safetyAcknowledged: "safety.acknowledged",
   configuration: "desk.configuration",
 } as const;
@@ -22,6 +23,12 @@ const keys = {
 export type DeskSettings = {
   configuration: DeskConfiguration;
   presets: Record<PresetName, number>;
+};
+
+export type CachedDeskStatus = {
+  heightCm: number;
+  deskName?: string;
+  updatedAt: number;
 };
 
 export async function getPreset(name: PresetName): Promise<number> {
@@ -100,6 +107,33 @@ export async function restoreDefaultSettings(): Promise<DeskSettings> {
   await saveSettings(settings);
   await logDiagnostic("info", "settings.restored-defaults");
   return settings;
+}
+
+export async function getCachedDeskStatus(): Promise<
+  CachedDeskStatus | undefined
+> {
+  const stored = await LocalStorage.getItem<string>(keys.deskStatus);
+  if (stored === undefined) return undefined;
+
+  try {
+    const status = JSON.parse(stored) as CachedDeskStatus;
+    if (
+      !Number.isFinite(status.heightCm) ||
+      !Number.isFinite(status.updatedAt) ||
+      (status.deskName !== undefined && typeof status.deskName !== "string")
+    ) {
+      return undefined;
+    }
+    return status;
+  } catch {
+    return undefined;
+  }
+}
+
+export async function saveCachedDeskStatus(
+  status: CachedDeskStatus,
+): Promise<void> {
+  await LocalStorage.setItem(keys.deskStatus, JSON.stringify(status));
 }
 
 export async function getDeskIdentifier(): Promise<string | undefined> {

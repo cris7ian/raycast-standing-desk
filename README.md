@@ -4,6 +4,8 @@ Control an IKEA IDÅSEN standing desk from Raycast through Bluetooth Low Energy 
 
 The extension shows the current height, stores Sit and Stand positions, moves to a target height, and stops active movement. Use it from Raycast search or as a persistent menu-bar control. Sit defaults to `70 cm`. Stand defaults to `110 cm`.
 
+The menu opens immediately with the last reported height. Sit, Stand, Raise, and Lower run as dedicated commands with visible connection and movement progress. Use **Refresh Height** when you only want a current reading.
+
 ![Standing Desk extension icon](assets/extension-icon.png)
 
 ## Commands

@@ -10,6 +10,12 @@
 
 The default scan matches Bluetooth names containing `Desk`. Open **Desk Settings** in **Manage Standing Desk** to change the filter.
 
+## Menu closes after selecting a position
+
+This is normal macOS menu behavior. Raycast continues the dedicated Sit or Stand command and shows its progress separately.
+
+The menu displays the last reported height without connecting first. Select **Refresh Height** to request a new reading without moving the desk.
+
 ## Bluetooth access is denied
 
 Open **System Settings > Privacy & Security > Bluetooth**. Enable access for **Standing Desk Bluetooth Helper**.

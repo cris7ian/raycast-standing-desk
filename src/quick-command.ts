@@ -28,13 +28,14 @@ export function moveToPresetCommand(name: PresetName) {
     const label = name === "sit" ? "Sit" : "Stand";
     const toast = await showToast({
       style: Toast.Style.Animated,
-      title: `Moving desk to ${label}`,
+      title: "Connecting to desk",
       message: formatHeight(target),
     });
     try {
-      const result = await moveDesk(target, (event) =>
-        updateProgress(toast, event),
-      );
+      const result = await moveDesk(target, (event) => {
+        toast.title = `Moving desk to ${label}`;
+        updateProgress(toast, event);
+      });
       toast.style = Toast.Style.Success;
       toast.title =
         result.outcome === "stopped"
@@ -55,12 +56,13 @@ export function nudgeCommand(direction: "up" | "down") {
     if (!(await ensureSafetyAcknowledgement())) return;
     const toast = await showToast({
       style: Toast.Style.Animated,
-      title: direction === "up" ? "Raising desk" : "Lowering desk",
+      title: "Connecting to desk",
     });
     try {
-      const result = await nudgeDesk(direction, (event) =>
-        updateProgress(toast, event),
-      );
+      const result = await nudgeDesk(direction, (event) => {
+        toast.title = direction === "up" ? "Raising desk" : "Lowering desk";
+        updateProgress(toast, event);
+      });
       toast.style = Toast.Style.Success;
       toast.title =
         result.outcome === "stopped" ? "Desk stopped" : "Desk adjusted";
@@ -79,7 +81,7 @@ export function savePresetCommand(name: PresetName) {
     const label = name === "sit" ? "Sit" : "Stand";
     const toast = await showToast({
       style: Toast.Style.Animated,
-      title: "Reading desk height",
+      title: "Connecting to desk",
     });
     try {
       const result = await readDesk();

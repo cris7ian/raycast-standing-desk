@@ -7,6 +7,7 @@ import { DeskConfiguration, validateTarget } from "./model";
 import {
   getConfiguration,
   getDeskIdentifier,
+  saveCachedDeskStatus,
   saveDeskIdentifier,
 } from "./storage";
 
@@ -89,6 +90,13 @@ async function runNative(
         const event = JSON.parse(line) as NativeEvent;
         lastEvent = event;
         if (event.identifier) void saveDeskIdentifier(event.identifier);
+        if (event.heightCm !== undefined && Number.isFinite(event.heightCm)) {
+          void saveCachedDeskStatus({
+            heightCm: event.heightCm,
+            deskName: event.deskName,
+            updatedAt: Date.now(),
+          });
+        }
         const now = Date.now();
         if (event.event !== "progress" || now - lastProgressLogAt >= 1_000) {
           lastProgressLogAt = now;

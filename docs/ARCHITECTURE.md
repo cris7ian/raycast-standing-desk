@@ -30,7 +30,7 @@ flowchart LR
 
 ### Menu-bar view
 
-`src/desk-menu.tsx` keeps the current height and common actions available from the macOS menu bar. It can open the full management view for custom-height and recovery actions.
+`src/desk-menu.tsx` shows the last reported height without opening Bluetooth during menu startup. It hands movement and save actions to dedicated Raycast commands so work continues after the menu closes. Manual refresh remains available for a current reading.
 
 ### Direct commands
 
@@ -38,7 +38,7 @@ The Sit, Stand, Raise, Lower, Stop, Save Sit, and Save Stand entry points call s
 
 ### Domain and persistence
 
-`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores presets, the selected desk identifier, and the safety acknowledgement through Raycast `LocalStorage`.
+`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores settings, presets, the selected desk identifier, the last reported height, and the safety acknowledgement through Raycast `LocalStorage`.
 
 ### Native process bridge
 

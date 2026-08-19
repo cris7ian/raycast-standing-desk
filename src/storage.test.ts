@@ -18,9 +18,11 @@ vi.mock("@raycast/api", () => ({
 vi.mock("./diagnostics", () => ({ logDiagnostic }));
 
 import {
+  getCachedDeskStatus,
   getConfiguration,
   getPresets,
   restoreDefaultSettings,
+  saveCachedDeskStatus,
   saveConfiguration,
   savePreset,
 } from "./storage";
@@ -90,5 +92,29 @@ describe("standing desk storage", () => {
       presets: { sit: 70, stand: 110 },
     });
     expect(values.get("desk.identifier")).toBe("kept-identifier");
+  });
+
+  it("stores a safe last-known desk status without the Bluetooth identifier", async () => {
+    await saveCachedDeskStatus({
+      heightCm: 109.8,
+      deskName: "Desk 1234",
+      updatedAt: 1_775_000_000_000,
+    });
+
+    await expect(getCachedDeskStatus()).resolves.toEqual({
+      heightCm: 109.8,
+      deskName: "Desk 1234",
+      updatedAt: 1_775_000_000_000,
+    });
+    expect(values.get("desk.status")).not.toContain("identifier");
+  });
+
+  it("ignores an invalid cached desk status", async () => {
+    values.set(
+      "desk.status",
+      JSON.stringify({ heightCm: "unknown", updatedAt: Date.now() }),
+    );
+
+    await expect(getCachedDeskStatus()).resolves.toBeUndefined();
   });
 });
