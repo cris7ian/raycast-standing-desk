@@ -144,6 +144,14 @@ export async function saveDeskIdentifier(identifier: string): Promise<void> {
   await LocalStorage.setItem(keys.deskIdentifier, identifier);
 }
 
+export async function selectDeskIdentifier(identifier: string): Promise<void> {
+  const currentIdentifier = await getDeskIdentifier();
+  await saveDeskIdentifier(identifier);
+  if (currentIdentifier !== identifier) {
+    await LocalStorage.removeItem(keys.deskStatus);
+  }
+}
+
 export async function forgetDeskIdentifier(): Promise<void> {
   await LocalStorage.removeItem(keys.deskIdentifier);
 }

@@ -9,9 +9,25 @@ import {
   Toast,
   useNavigation,
 } from "@raycast/api";
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import {
+  deskOptionTitle,
+  DiscoveredDesk,
+  mergeDiscoveredDesk,
+  rememberedSelectionForRescan,
+} from "./desk-discovery";
 import { parseHeight, validateConfiguration, validateTarget } from "./model";
-import { DeskSettings, restoreDefaultSettings, saveSettings } from "./storage";
+import { discoverDesks } from "./native";
+import {
+  DeskSettings,
+  getCachedDeskStatus,
+  getDeskIdentifier,
+  restoreDefaultSettings,
+  saveSettings,
+  selectDeskIdentifier,
+} from "./storage";
+
+const NO_DESK = "no-desk";
 
 type SettingsValues = {
   deskName: string;
@@ -46,7 +62,68 @@ export default function SettingsForm({
 }) {
   const { pop } = useNavigation();
   const [values, setValues] = useState(() => formValues(initialSettings));
+  const [desks, setDesks] = useState<DiscoveredDesk[]>([]);
+  const [rememberedIdentifier, setRememberedIdentifier] = useState<string>();
+  const [selectedIdentifier, setSelectedIdentifier] = useState(NO_DESK);
+  const [isDiscovering, setIsDiscovering] = useState(false);
+  const [discoveryError, setDiscoveryError] = useState<string>();
   const [error, setError] = useState<string>();
+  const scanActive = useRef(false);
+
+  const addDesk = useCallback((desk: DiscoveredDesk) => {
+    setDesks((current) => mergeDiscoveredDesk(current, desk));
+  }, []);
+
+  const scanForDesks = useCallback(
+    async (nameFilter: string, preservedIdentifier?: string) => {
+      if (scanActive.current) return;
+      scanActive.current = true;
+      setDesks((current) =>
+        current.filter((desk) => desk.identifier === preservedIdentifier),
+      );
+      setSelectedIdentifier(
+        (current) =>
+          rememberedSelectionForRescan(current, preservedIdentifier) ?? NO_DESK,
+      );
+      setIsDiscovering(true);
+      setDiscoveryError(undefined);
+      try {
+        await discoverDesks(nameFilter, addDesk);
+      } catch (scanError) {
+        setDiscoveryError(
+          scanError instanceof Error ? scanError.message : String(scanError),
+        );
+      } finally {
+        scanActive.current = false;
+        setIsDiscovering(false);
+      }
+    },
+    [addDesk],
+  );
+
+  useEffect(() => {
+    let active = true;
+    void Promise.all([getDeskIdentifier(), getCachedDeskStatus()]).then(
+      ([identifier, cachedStatus]) => {
+        if (!active) return;
+        if (identifier) {
+          setRememberedIdentifier(identifier);
+          setSelectedIdentifier(identifier);
+          addDesk({
+            identifier,
+            name:
+              cachedStatus?.deskName ?? initialSettings.configuration.deskName,
+            nameQuality: cachedStatus?.deskName ? 1 : 0,
+            connected: false,
+          });
+        }
+        void scanForDesks(initialSettings.configuration.deskName, identifier);
+      },
+    );
+    return () => {
+      active = false;
+    };
+  }, [addDesk, initialSettings.configuration.deskName, scanForDesks]);
 
   function update(name: keyof SettingsValues, value: string) {
     setValues((current) => ({ ...current, [name]: value }));
@@ -78,8 +155,25 @@ export default function SettingsForm({
 
   async function submit() {
     try {
+      if (selectedIdentifier === NO_DESK) {
+        throw new Error(
+          "Select a nearby desk. Put the desk in Bluetooth pairing mode, then scan again.",
+        );
+      }
+      const selectedDesk = desks.find(
+        (desk) => desk.identifier === selectedIdentifier,
+      );
+      if (!selectedDesk) {
+        throw new Error(
+          "The selected desk is no longer available. Scan again.",
+        );
+      }
       const settings = parseSettings();
-      await saveSettings(settings);
+      await Promise.all([
+        saveSettings(settings),
+        selectDeskIdentifier(selectedIdentifier),
+      ]);
+      setRememberedIdentifier(selectedIdentifier);
       onSaved(settings);
       if (popAfterSave) pop();
       await showToast({
@@ -133,6 +227,11 @@ export default function SettingsForm({
             onSubmit={submit}
           />
           <Action
+            title={isDiscovering ? "Scanning for Desks" : "Scan for Desks"}
+            icon={Icon.Wifi}
+            onAction={() => scanForDesks(values.deskName, rememberedIdentifier)}
+          />
+          <Action
             title="Restore Default Settings"
             icon={Icon.ArrowCounterClockwise}
             style={Action.Style.Destructive}
@@ -141,9 +240,42 @@ export default function SettingsForm({
         </ActionPanel>
       }
     >
+      <Form.Dropdown
+        id="deskIdentifier"
+        title="Desk"
+        value={selectedIdentifier}
+        onChange={setSelectedIdentifier}
+      >
+        <Form.Dropdown.Item
+          value={NO_DESK}
+          title={
+            isDiscovering
+              ? "Scanning for desks…"
+              : desks.length === 0
+                ? "No desks found"
+                : "Select a desk…"
+          }
+        />
+        {desks.map((desk) => (
+          <Form.Dropdown.Item
+            key={desk.identifier}
+            value={desk.identifier}
+            title={deskOptionTitle(desk, rememberedIdentifier)}
+          />
+        ))}
+      </Form.Dropdown>
+      <Form.Description
+        title={discoveryError ? "Discovery Failed" : "Bluetooth Discovery"}
+        text={
+          discoveryError ??
+          (isDiscovering
+            ? "Scanning nearby Bluetooth devices. This does not move the desk."
+            : "Put the desk in Bluetooth pairing mode, then use Scan for Desks to refresh this list.")
+        }
+      />
       <Form.TextField
         id="deskName"
-        title="Bluetooth Name"
+        title="Discovery Name Filter"
         value={values.deskName}
         onChange={(value) => update("deskName", value)}
       />

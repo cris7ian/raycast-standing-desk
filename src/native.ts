@@ -3,6 +3,12 @@ import { spawn } from "node:child_process";
 import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { logDiagnostic } from "./diagnostics";
+import {
+  DiscoveredDesk,
+  mergeDiscoveredDesk,
+  shouldPersistNativeIdentifier,
+  validateDiscoveryName,
+} from "./desk-discovery";
 import { DeskConfiguration, validateTarget } from "./model";
 import { beginMovementRequest } from "./movement-request";
 import {
@@ -13,10 +19,11 @@ import {
 } from "./storage";
 
 export type NativeEvent = {
-  event: "status" | "progress" | "complete" | "error";
+  event: "device" | "status" | "progress" | "complete" | "error";
   connected?: boolean;
   deskName?: string;
   identifier?: string;
+  nameQuality?: number;
   heightCm?: number;
   speed?: number;
   outcome?: "reached" | "stopped";
@@ -95,7 +102,9 @@ async function runNative(
       try {
         const event = JSON.parse(line) as NativeEvent;
         lastEvent = event;
-        if (event.identifier) void saveDeskIdentifier(event.identifier);
+        if (shouldPersistNativeIdentifier(event.event, event.identifier)) {
+          void saveDeskIdentifier(event.identifier);
+        }
         if (event.heightCm !== undefined && Number.isFinite(event.heightCm)) {
           void saveCachedDeskStatus({
             heightCm: event.heightCm,
@@ -167,6 +176,35 @@ export async function readDesk(
   onEvent?: (event: NativeEvent) => void,
 ): Promise<NativeEvent> {
   return runNative("status", [], onEvent);
+}
+
+export async function discoverDesks(
+  deskName: string,
+  onDevice?: (desk: DiscoveredDesk) => void,
+): Promise<DiscoveredDesk[]> {
+  const nameFilter = validateDiscoveryName(deskName);
+  const configuration = await getConfiguration();
+  const desks: DiscoveredDesk[] = [];
+  await runNative(
+    "discover",
+    [],
+    (event) => {
+      if (event.event !== "device" || !event.identifier || !event.deskName) {
+        return;
+      }
+      const desk = {
+        identifier: event.identifier,
+        name: event.deskName,
+        nameQuality: event.nameQuality ?? 0,
+        connected: event.connected === true,
+      };
+      const merged = mergeDiscoveredDesk(desks, desk);
+      desks.splice(0, desks.length, ...merged);
+      onDevice?.(desk);
+    },
+    { ...configuration, deskName: nameFilter },
+  );
+  return desks;
 }
 
 export async function moveDesk(

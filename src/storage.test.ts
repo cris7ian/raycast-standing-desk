@@ -25,6 +25,7 @@ import {
   saveCachedDeskStatus,
   saveConfiguration,
   savePreset,
+  selectDeskIdentifier,
 } from "./storage";
 
 describe("standing desk storage", () => {
@@ -116,5 +117,24 @@ describe("standing desk storage", () => {
     );
 
     await expect(getCachedDeskStatus()).resolves.toBeUndefined();
+  });
+
+  it("clears the cached height when the selected desk changes", async () => {
+    values.set("desk.identifier", "old-identifier");
+    values.set("desk.status", "cached-status");
+
+    await selectDeskIdentifier("new-identifier");
+
+    expect(values.get("desk.identifier")).toBe("new-identifier");
+    expect(values.has("desk.status")).toBe(false);
+  });
+
+  it("keeps the cached height when the selected desk does not change", async () => {
+    values.set("desk.identifier", "desk-identifier");
+    values.set("desk.status", "cached-status");
+
+    await selectDeskIdentifier("desk-identifier");
+
+    expect(values.get("desk.status")).toBe("cached-status");
   });
 });
