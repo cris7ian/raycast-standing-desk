@@ -134,8 +134,6 @@ export default function Command() {
     await showInFinder(logPath);
   }
 
-  const topBarTitle =
-    desk.height === undefined ? "Desk" : formatHeight(desk.height);
   const hasCachedStatus =
     desk.height !== undefined && desk.updatedAt !== undefined;
   const statusTitle = isRefreshing
@@ -155,12 +153,7 @@ export default function Command() {
   return (
     <MenuBarExtra
       icon={Icon.Desktop}
-      title={topBarTitle}
-      tooltip={
-        statusError
-          ? `Standing Desk: ${statusError.message}`
-          : `Standing Desk${desk.height === undefined ? "" : ` · ${formatHeight(desk.height)}`}`
-      }
+      tooltip="Standing Desk"
       isLoading={isRefreshing}
     >
       <MenuBarExtra.Section>

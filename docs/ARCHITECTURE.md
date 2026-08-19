@@ -30,7 +30,7 @@ flowchart LR
 
 ### Menu-bar view
 
-`src/desk-menu.tsx` shows the last reported height without opening Bluetooth during menu startup. It hands movement and save actions to dedicated Raycast commands so work continues after the menu closes. Manual refresh remains available for a current reading.
+`src/desk-menu.tsx` renders an icon-only macOS menu-bar item. Its menu shows the last reported height without opening Bluetooth during startup. It hands movement and save actions to dedicated Raycast commands so work continues after the menu closes. Manual refresh remains available for a current reading.
 
 ### Direct commands
 

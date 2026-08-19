@@ -13,7 +13,7 @@
     {
       "name": "desk-menu",
       "title": "Standing Desk Menu",
-      "description": "Control the desk and see its height from the menu bar",
+      "description": "Control the desk from a menu bar icon and see its height in the menu",
       "mode": "menu-bar",
       "interval": "1m"
     },

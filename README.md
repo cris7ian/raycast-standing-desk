@@ -12,7 +12,7 @@ The menu opens immediately with the last reported height. Sit, Stand, Raise, and
 
 | Command                          | Result                                               |
 | -------------------------------- | ---------------------------------------------------- |
-| **Standing Desk Menu**           | Shows height and controls in the macOS menu bar.     |
+| **Standing Desk Menu**           | Opens height and controls from a menu-bar icon.      |
 | **Manage Standing Desk**         | Opens the complete control view.                     |
 | **Desk Settings**                | Edits settings or restores safe defaults.            |
 | **Move Desk to Sit**             | Moves to the saved Sit position.                     |
