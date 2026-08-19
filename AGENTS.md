@@ -13,6 +13,7 @@ Read `docs/ARCHITECTURE.md` before changing component boundaries. Read `docs/SAF
 - A status-only desk read is allowed when live verification is requested.
 - Keep Stop available during every movement workflow.
 - Preserve the 45-second timeout, stall detection, target bounds, and movement lock.
+- Preserve latest-request-wins handoff. Atomically replace `stop-request` with a unique identifier before each movement or Stop action; never clear it.
 - Never weaken a safety guard without an explicit requirement and a focused test.
 
 ## Source boundaries
