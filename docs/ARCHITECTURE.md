@@ -22,11 +22,15 @@ flowchart LR
 
 ### Raycast manifest
 
-`package.json` defines eight command entry points and five shared preferences. It also pins the Raycast API to the installed stable runtime.
+`package.json` defines the command entry points and pins the Raycast API to the installed stable runtime.
 
 ### Management view
 
 `src/manage-desk.tsx` renders desk status, presets, adjustment actions, custom height input, and recovery actions. It streams native progress into the visible height and toast messages.
+
+### Menu-bar view
+
+`src/desk-menu.tsx` keeps the current height and common actions available from the macOS menu bar. It can open the full management view for custom-height and recovery actions.
 
 ### Direct commands
 

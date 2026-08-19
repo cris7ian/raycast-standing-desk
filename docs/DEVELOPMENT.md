@@ -22,6 +22,7 @@ npm run dev
 | Path                      | Responsibility                                      |
 | ------------------------- | --------------------------------------------------- |
 | `src/manage-desk.tsx`     | Full Raycast interface and action coordination.     |
+| `src/desk-menu.tsx`       | Persistent menu-bar status and common actions.      |
 | `src/quick-command.ts`    | Shared direct-command behavior.                     |
 | `src/native.ts`           | Native process execution and JSON event parsing.    |
 | `src/storage.ts`          | Presets, selected desk, and safety acknowledgement. |

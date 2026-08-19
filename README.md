@@ -2,7 +2,7 @@
 
 Control an IKEA IDÅSEN standing desk from Raycast through Bluetooth Low Energy (BLE).
 
-The extension shows the current height, stores Sit and Stand positions, moves to a target height, and stops active movement. Sit defaults to `70 cm`. Stand defaults to `110 cm`.
+The extension shows the current height, stores Sit and Stand positions, moves to a target height, and stops active movement. Use it from Raycast search or as a persistent menu-bar control. Sit defaults to `70 cm`. Stand defaults to `110 cm`.
 
 ![Standing Desk extension icon](assets/extension-icon.png)
 
@@ -10,6 +10,7 @@ The extension shows the current height, stores Sit and Stand positions, moves to
 
 | Command                          | Result                                               |
 | -------------------------------- | ---------------------------------------------------- |
+| **Standing Desk Menu**           | Shows height and controls in the macOS menu bar.     |
 | **Manage Standing Desk**         | Opens the complete control view.                     |
 | **Move Desk to Sit**             | Moves to the saved Sit position.                     |
 | **Move Desk to Stand**           | Moves to the saved Stand position.                   |
@@ -36,7 +37,7 @@ The management view also supports a custom target height and desk selection rese
 3. Run `npm run dev`.
 4. Approve Bluetooth access when macOS asks.
 5. Hold the desk Bluetooth button until its light flashes.
-6. Open **Manage Standing Desk** in Raycast.
+6. Open **Manage Standing Desk** or **Standing Desk Menu** in Raycast.
 
 `npm run dev` compiles a signed universal helper for Apple silicon and Intel Macs. Raycast keeps the development extension after the process stops.
 
