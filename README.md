@@ -1,4 +1,4 @@
-# Standing Desk for Raycast
+# <img src="assets/standing-desk-icon.png" width="32" alt="" /> Standing Desk for Raycast
 
 Control an IKEA IDÅSEN standing desk from Raycast through Bluetooth Low Energy (BLE).
 
@@ -7,8 +7,6 @@ The extension shows the current height, stores Sit and Stand positions, moves to
 The menu opens immediately with the last reported height. Sit, Stand, Raise, and Lower run as dedicated commands with visible connection and movement progress. Use **Refresh Height** when you only want a current reading.
 
 The extension is self-contained. It does not require Python, Bluetility, or a manually copied Bluetooth identifier.
-
-![Standing Desk extension icon](assets/standing-desk-icon.png)
 
 ## Commands
 
