@@ -22,7 +22,11 @@ export function defaultConfiguration(): DeskConfiguration {
 }
 
 export function parseHeight(value: string, label: string): number {
-  const parsed = Number(value.replace(",", "."));
+  const normalized = value.trim();
+  if (!normalized) {
+    throw new Error(`${label} must be a number.`);
+  }
+  const parsed = Number(normalized.replace(",", "."));
   if (!Number.isFinite(parsed)) {
     throw new Error(`${label} must be a number.`);
   }
@@ -48,6 +52,13 @@ export function validateConfiguration(
     if (!Number.isFinite(value)) {
       throw new Error(`${label} must be a number.`);
     }
+  }
+  if (
+    configuration.baseHeight <= 0 ||
+    configuration.minimumHeight <= 0 ||
+    configuration.maximumHeight <= 0
+  ) {
+    throw new Error("Base, Minimum, and Maximum Height must be above 0 cm.");
   }
   if (configuration.minimumHeight >= configuration.maximumHeight) {
     throw new Error("Minimum Height must be lower than Maximum Height.");

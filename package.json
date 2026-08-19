@@ -1,9 +1,16 @@
 {
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "standing-desk",
-  "title": "Standing Desk",
+  "title": "IDÅSEN Desk",
   "description": "Control an IKEA IDÅSEN standing desk over Bluetooth",
-  "icon": "extension-icon.png",
+  "keywords": [
+    "IKEA",
+    "IDÅSEN",
+    "standing desk",
+    "LINAK",
+    "Bluetooth"
+  ],
+  "icon": "idasen-desk-icon.png",
   "author": "cristian",
   "license": "MIT",
   "platforms": [
@@ -24,12 +31,6 @@
       "name": "manage-desk",
       "title": "Manage Standing Desk",
       "description": "View the height and control every desk action",
-      "mode": "view"
-    },
-    {
-      "name": "desk-settings",
-      "title": "Desk Settings",
-      "description": "Select a Bluetooth desk and edit its limits and positions",
       "mode": "view"
     },
     {

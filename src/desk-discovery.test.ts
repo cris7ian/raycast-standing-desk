@@ -4,7 +4,6 @@ import {
   DiscoveredDesk,
   mergeDiscoveredDesk,
   rememberedSelectionForRescan,
-  shouldPersistNativeIdentifier,
   validateDiscoveryName,
 } from "./desk-discovery";
 
@@ -56,12 +55,6 @@ describe("desk discovery", () => {
       "Desk 1234 · Connected · ABCD",
     );
     expect(deskOptionTitle(desk)).toBe("Desk 1234 · Nearby · ABCD");
-  });
-
-  it("does not persist identifiers streamed during discovery", () => {
-    expect(shouldPersistNativeIdentifier("device", "candidate-id")).toBe(false);
-    expect(shouldPersistNativeIdentifier("status", "selected-id")).toBe(true);
-    expect(shouldPersistNativeIdentifier("complete")).toBe(false);
   });
 
   it("requires a non-empty discovery name filter", () => {

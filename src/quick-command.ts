@@ -1,14 +1,7 @@
 import { showToast, Toast } from "@raycast/api";
 import { ensureSafetyAcknowledgement } from "./safety";
 import { formatHeight } from "./model";
-import {
-  moveDesk,
-  NativeEvent,
-  nudgeDesk,
-  readDesk,
-  requestStop,
-  stopDesk,
-} from "./native";
+import { moveDesk, NativeEvent, nudgeDesk, readDesk, stopDesk } from "./native";
 import { getPreset, PresetName, savePreset } from "./storage";
 
 function errorMessage(error: unknown): string {
@@ -39,10 +32,14 @@ export function moveToPresetCommand(name: PresetName) {
       toast.style = Toast.Style.Success;
       toast.title =
         result.outcome === "stopped"
-          ? "Desk stopped"
+          ? "Stop command sent"
           : `Desk moved to ${label}`;
       toast.message =
-        result.heightCm === undefined ? "" : formatHeight(result.heightCm);
+        result.outcome === "stopped"
+          ? "Use the physical control if the desk is still moving."
+          : result.heightCm === undefined
+            ? ""
+            : formatHeight(result.heightCm);
     } catch (error) {
       toast.style = Toast.Style.Failure;
       toast.title = "Could not move desk";
@@ -65,9 +62,13 @@ export function nudgeCommand(direction: "up" | "down") {
       });
       toast.style = Toast.Style.Success;
       toast.title =
-        result.outcome === "stopped" ? "Desk stopped" : "Desk adjusted";
+        result.outcome === "stopped" ? "Stop command sent" : "Desk adjusted";
       toast.message =
-        result.heightCm === undefined ? "" : formatHeight(result.heightCm);
+        result.outcome === "stopped"
+          ? "Use the physical control if the desk is still moving."
+          : result.heightCm === undefined
+            ? ""
+            : formatHeight(result.heightCm);
     } catch (error) {
       toast.style = Toast.Style.Failure;
       toast.title = "Could not adjust desk";
@@ -104,13 +105,14 @@ export async function stopCommand() {
     style: Toast.Style.Animated,
     title: "Stopping desk",
   });
-  const stopRequestID = await requestStop();
   try {
-    const result = await stopDesk(undefined, stopRequestID);
+    const result = await stopDesk();
     toast.style = Toast.Style.Success;
-    toast.title = "Desk stopped";
+    toast.title = "Stop command sent";
     toast.message =
-      result.heightCm === undefined ? "" : formatHeight(result.heightCm);
+      result.heightCm === undefined
+        ? "Use the physical control if the desk is still moving."
+        : `${formatHeight(result.heightCm)} · Use the physical control if needed.`;
   } catch (error) {
     toast.style = Toast.Style.Failure;
     toast.title = "Stop requested";

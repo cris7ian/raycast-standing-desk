@@ -11,8 +11,9 @@ import {
   showToast,
   useNavigation,
 } from "@raycast/api";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureDiagnosticLog } from "./diagnostics";
+import { forgetDeskSession } from "./desk-session";
 import { ensureSafetyAcknowledgement } from "./safety";
 import {
   defaultConfiguration,
@@ -21,18 +22,10 @@ import {
   parseHeight,
   validateTarget,
 } from "./model";
-import {
-  moveDesk,
-  NativeEvent,
-  nudgeDesk,
-  readDesk,
-  requestStop,
-  stopDesk,
-} from "./native";
+import { moveDesk, NativeEvent, nudgeDesk, readDesk, stopDesk } from "./native";
 import SettingsForm from "./settings-form";
 import {
   DeskSettings,
-  forgetDeskIdentifier,
   getConfiguration,
   getPresets,
   PresetName,
@@ -60,6 +53,7 @@ export default function Command() {
   const [statusError, setStatusError] = useState<string>();
   const [isLoading, setIsLoading] = useState(true);
   const [isMoving, setIsMoving] = useState(false);
+  const viewGeneration = useRef(0);
 
   const acceptEvent = useCallback((event: NativeEvent) => {
     if (event.event === "error") return;
@@ -73,22 +67,26 @@ export default function Command() {
   }, []);
 
   const refresh = useCallback(async () => {
+    const generation = ++viewGeneration.current;
     setIsLoading(true);
     setStatusError(undefined);
     try {
-      const [savedConfiguration, savedPresets, event] = await Promise.all([
+      const [savedConfiguration, savedPresets] = await Promise.all([
         getConfiguration(),
         getPresets(),
-        readDesk(acceptEvent),
+        readDesk((event) => {
+          if (viewGeneration.current === generation) acceptEvent(event);
+        }),
       ]);
+      if (viewGeneration.current !== generation) return;
       setConfiguration(savedConfiguration);
       setPresets(savedPresets);
-      acceptEvent(event);
     } catch (error) {
+      if (viewGeneration.current !== generation) return;
       setStatusError(errorMessage(error));
       setDesk((current) => ({ ...current, connected: false }));
     } finally {
-      setIsLoading(false);
+      if (viewGeneration.current === generation) setIsLoading(false);
     }
   }, [acceptEvent]);
 
@@ -105,17 +103,25 @@ export default function Command() {
     });
     setIsMoving(true);
     setStatusError(undefined);
+    const generation = viewGeneration.current;
     try {
-      const event = await moveDesk(target, acceptEvent);
-      acceptEvent(event);
+      const event = await moveDesk(target, (nativeEvent) => {
+        if (viewGeneration.current === generation) acceptEvent(nativeEvent);
+      });
       toast.style = Toast.Style.Success;
       toast.title =
-        event.outcome === "stopped" ? "Desk stopped" : `Desk moved to ${label}`;
+        event.outcome === "stopped"
+          ? "Stop command sent"
+          : `Desk moved to ${label}`;
       toast.message =
-        event.heightCm === undefined ? "" : formatHeight(event.heightCm);
+        event.outcome === "stopped"
+          ? "Use the physical control if the desk is still moving."
+          : event.heightCm === undefined
+            ? ""
+            : formatHeight(event.heightCm);
     } catch (error) {
       const message = errorMessage(error);
-      setStatusError(message);
+      if (viewGeneration.current === generation) setStatusError(message);
       toast.style = Toast.Style.Failure;
       toast.title = "Could not move desk";
       toast.message = message;
@@ -132,17 +138,23 @@ export default function Command() {
     });
     setIsMoving(true);
     setStatusError(undefined);
+    const generation = viewGeneration.current;
     try {
-      const event = await nudgeDesk(direction, acceptEvent);
-      acceptEvent(event);
+      const event = await nudgeDesk(direction, (nativeEvent) => {
+        if (viewGeneration.current === generation) acceptEvent(nativeEvent);
+      });
       toast.style = Toast.Style.Success;
       toast.title =
-        event.outcome === "stopped" ? "Desk stopped" : "Desk adjusted";
+        event.outcome === "stopped" ? "Stop command sent" : "Desk adjusted";
       toast.message =
-        event.heightCm === undefined ? "" : formatHeight(event.heightCm);
+        event.outcome === "stopped"
+          ? "Use the physical control if the desk is still moving."
+          : event.heightCm === undefined
+            ? ""
+            : formatHeight(event.heightCm);
     } catch (error) {
       const message = errorMessage(error);
-      setStatusError(message);
+      if (viewGeneration.current === generation) setStatusError(message);
       toast.style = Toast.Style.Failure;
       toast.title = "Could not adjust desk";
       toast.message = message;
@@ -152,22 +164,18 @@ export default function Command() {
   }
 
   async function performStop() {
-    const stopRequestID = await requestStop();
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: "Stopping desk",
     });
-    if (isMoving) {
-      toast.style = Toast.Style.Success;
-      toast.title = "Stop requested";
-      toast.message = "The active movement will stop immediately.";
-      return;
-    }
+    const generation = viewGeneration.current;
     try {
-      const event = await stopDesk(acceptEvent, stopRequestID);
-      acceptEvent(event);
+      await stopDesk((nativeEvent) => {
+        if (viewGeneration.current === generation) acceptEvent(nativeEvent);
+      });
       toast.style = Toast.Style.Success;
-      toast.title = "Desk stopped";
+      toast.title = "Stop command sent";
+      toast.message = "Use the physical control if the desk is still moving.";
     } catch (error) {
       toast.style = Toast.Style.Failure;
       toast.title = "Could not contact desk";
@@ -194,13 +202,22 @@ export default function Command() {
   }
 
   async function forgetDesk() {
-    await forgetDeskIdentifier();
-    setDesk(initialDeskState);
-    await showToast({
-      style: Toast.Style.Success,
-      title: "Forgot connected desk",
-    });
-    await refresh();
+    try {
+      await forgetDeskSession();
+      viewGeneration.current += 1;
+      setDesk(initialDeskState);
+      setStatusError(undefined);
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Forgot connected desk",
+      });
+    } catch (error) {
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Could not forget desk",
+        message: errorMessage(error),
+      });
+    }
   }
 
   async function showDiagnosticLog() {
@@ -208,9 +225,15 @@ export default function Command() {
     await showInFinder(logPath);
   }
 
-  function acceptSettings(settings: DeskSettings) {
+  function acceptSettings(settings: DeskSettings, hasSelectedDesk: boolean) {
+    viewGeneration.current += 1;
     setConfiguration(settings.configuration);
     setPresets(settings.presets);
+    setDesk(initialDeskState);
+    setStatusError(undefined);
+    if (hasSelectedDesk) {
+      void refresh();
+    }
   }
 
   const settingsForm = (

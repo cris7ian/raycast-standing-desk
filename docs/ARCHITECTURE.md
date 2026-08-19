@@ -38,11 +38,13 @@ The Sit, Stand, Raise, Lower, Stop, Save Sit, and Save Stand entry points call s
 
 ### Domain and persistence
 
-`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores settings, presets, the selected desk identifier, the last reported height, and the safety acknowledgement through Raycast `LocalStorage`. Selecting another desk clears the cached height from the previous desk.
+`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores settings, presets, an explicit desk selection, the last reported height, and a desk-scoped safety acknowledgement through Raycast `LocalStorage`. Each selection has an opaque generation token. Cached events and acknowledgements apply only to that generation, so stale processes cannot change or populate another desk's state.
+
+Movement and status commands require an explicit desk selection. Only discovery can use the Bluetooth name filter. Settings, calibration, restore, and forget operations publish Stop requests before and after changing desk-bound state.
 
 ### Native process bridge
 
-`src/native.ts` validates settings, starts `assets/deskctl`, parses newline-delimited JSON events, and updates the stored desk identifier.
+`src/native.ts` validates settings, snapshots the selected desk, starts `assets/deskctl`, parses newline-delimited JSON events, and updates desk-scoped cached status.
 
 The bridge uses two support files:
 
@@ -55,21 +57,23 @@ The bridge uses two support files:
 
 The `discover` operation runs for five seconds. It reports the remembered peripheral, compatible peripherals connected to macOS, and nearby advertisements matching the desk service or name filter. It does not connect to a peripheral or write Bluetooth characteristics.
 
-`scripts/build-native.sh` compiles `arm64` and `x86_64` executables. It combines them with `lipo`, embeds `native/Info.plist`, and applies an ad-hoc signature.
+`scripts/build-native.sh` compiles `arm64` and `x86_64` executables in `.raycast-swift-build`. It combines them with `lipo`, embeds `native/Info.plist`, and applies an ad-hoc signature.
 
 ## Movement sequence
 
 1. TypeScript validates the requested target.
-2. The bridge publishes a unique movement request identifier.
-3. An active helper detects the new identifier and stops.
-4. The new helper waits up to five seconds for the movement lock.
-5. A superseded helper exits without connecting to the desk.
-6. CoreBluetooth discovers and connects to the desk.
-7. The helper reads the current height.
-8. The helper wakes and stops the controller before movement.
-9. The helper writes the target every 400 milliseconds.
-10. Height notifications and explicit reads update progress.
-11. The helper stops after two readings within `0.25 cm`.
+2. The bridge snapshots the selected desk and its validated configuration.
+3. The bridge verifies the safety acknowledgement for that exact selection.
+4. The bridge publishes a unique movement request identifier.
+5. An active helper detects the new identifier and stops.
+6. The new helper waits up to five seconds for the movement lock.
+7. A superseded helper exits without connecting to the desk.
+8. CoreBluetooth connects only to the snapshotted desk identifier.
+9. The helper reads the current height.
+10. The helper wakes and stops the controller before movement.
+11. The helper writes the target every 400 milliseconds.
+12. Height notifications and explicit reads update progress.
+13. The helper sends Stop after two readings within `0.25 cm`.
 
 Movement also stops after cancellation, a stall, a Bluetooth error, or 45 seconds.
 

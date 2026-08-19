@@ -26,6 +26,8 @@ The extension implements these independent safeguards:
 
 - Configurable minimum and maximum target heights.
 - A first-use safety acknowledgement.
+- A safety acknowledgement scoped to the selected physical desk.
+- Explicit desk selection before every status or movement command.
 - A single-process movement lock.
 - A latest-request-wins handoff that stops an active extension movement.
 - A five-second handoff timeout before a new movement fails safely.
@@ -34,6 +36,7 @@ The extension implements these independent safeguards:
 - Stall detection.
 - A 45-second movement timeout.
 - A final stop command after success, cancellation, or failure.
+- Stop requests before and after desk or calibration changes.
 
 These safeguards reduce risk. They do not replace operator attention or the desk controller's hardware protections.
 

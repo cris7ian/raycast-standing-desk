@@ -65,6 +65,7 @@ export default function Command() {
   const [configuration, setConfiguration] = useState(defaultConfiguration());
   const [desk, setDesk] = useState<DeskState>(initialDeskState);
   const [presets, setPresets] = useState({ sit: 70, stand: 110 });
+  const [isInitializing, setIsInitializing] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [statusError, setStatusError] = useState<DeskStatusError>();
 
@@ -97,6 +98,8 @@ export default function Command() {
       }
     } catch {
       // Keep the safe defaults when local state cannot be read.
+    } finally {
+      setIsInitializing(false);
     }
   }, []);
 
@@ -148,13 +151,13 @@ export default function Command() {
     : desk.height !== undefined && desk.updatedAt !== undefined
       ? `${desk.name ?? "Desk"} · ${formatHeight(desk.height)} · ${formatStatusAge(desk.updatedAt)}`
       : "Select a position or refresh the height";
-  const actionsDisabled = isRefreshing;
+  const actionsDisabled = isInitializing || isRefreshing;
 
   return (
     <MenuBarExtra
-      icon={Icon.Desktop}
-      tooltip="Standing Desk"
-      isLoading={isRefreshing}
+      icon={{ source: "menu-bar-icon.svg", tintColor: Color.PrimaryText }}
+      tooltip="IDÅSEN Desk"
+      isLoading={isInitializing || isRefreshing}
     >
       <MenuBarExtra.Section>
         <MenuBarExtra.Item
@@ -251,16 +254,6 @@ export default function Command() {
           onAction={() =>
             launchCommand({
               name: "manage-desk",
-              type: LaunchType.UserInitiated,
-            })
-          }
-        />
-        <MenuBarExtra.Item
-          icon={Icon.Gear}
-          title="Desk Settings…"
-          onAction={() =>
-            launchCommand({
-              name: "desk-settings",
               type: LaunchType.UserInitiated,
             })
           }

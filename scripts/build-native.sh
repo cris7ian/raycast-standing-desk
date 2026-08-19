@@ -5,7 +5,7 @@ project_root="$(cd "$(dirname "$0")/.." && pwd)"
 source_file="$project_root/native/DeskBLE.swift"
 info_plist="$project_root/native/Info.plist"
 output_file="$project_root/assets/deskctl"
-build_directory="$project_root/.swift-build"
+build_directory="$project_root/.raycast-swift-build"
 sdk_path="$(xcrun --sdk macosx --show-sdk-path)"
 
 mkdir -p "$build_directory"

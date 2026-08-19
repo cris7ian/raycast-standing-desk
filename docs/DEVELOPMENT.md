@@ -3,7 +3,7 @@
 ## Prerequisites
 
 - macOS.
-- Node.js 22 or later.
+- Node.js 22.22.2 or later.
 - npm 7 or later.
 - Xcode Command Line Tools.
 - Raycast stable.
@@ -23,7 +23,6 @@ npm run dev
 | ------------------------- | --------------------------------------------------- |
 | `src/manage-desk.tsx`     | Full Raycast interface and action coordination.     |
 | `src/desk-menu.tsx`       | Persistent menu-bar status and common actions.      |
-| `src/desk-settings.tsx`   | Direct settings command.                             |
 | `src/settings-form.tsx`   | Settings validation and default restoration.        |
 | `src/quick-command.ts`    | Shared direct-command behavior.                     |
 | `src/native.ts`           | Native process execution and JSON event parsing.    |
@@ -32,6 +31,8 @@ npm run dev
 | `src/diagnostics.ts`      | Bounded and redacted diagnostic logging.             |
 | `native/DeskBLE.swift`    | CoreBluetooth state machine and movement safety.    |
 | `scripts/build-native.sh` | Universal helper build and signing.                 |
+
+Native architecture intermediates are written to `.raycast-swift-build`, which the Raycast publisher excludes from Store submissions.
 
 ## Verification
 
@@ -57,10 +58,18 @@ Run linting, type checking, tests, and the Raycast production build. This level 
 
 ### Level 2: Status only
 
-Quit other desk-control applications if connection fails. Then run:
+Quit other desk-control applications if connection fails. Discover the local CoreBluetooth identifier first:
 
 ```sh
+./assets/deskctl discover --name Desk --discovery-timeout 5
+```
+
+Copy the reported `identifier` value. Then run:
+
+```sh
+desk_identifier="PASTE_COREBLUETOOTH_UUID_HERE"
 ./assets/deskctl status \
+  --identifier "$desk_identifier" \
   --name Desk \
   --base-height 62 \
   --minimum-height 62 \

@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const values = vi.hoisted(() => new Map<string, string>());
 const logDiagnostic = vi.hoisted(() => vi.fn());
+const deskA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const deskB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 
 vi.mock("@raycast/api", () => ({
   LocalStorage: {
@@ -18,9 +20,13 @@ vi.mock("@raycast/api", () => ({
 vi.mock("./diagnostics", () => ({ logDiagnostic }));
 
 import {
+  acknowledgeSafety,
+  forgetDeskIdentifier,
   getCachedDeskStatus,
   getConfiguration,
+  getDeskSelection,
   getPresets,
+  hasAcknowledgedSafety,
   restoreDefaultSettings,
   saveCachedDeskStatus,
   saveConfiguration,
@@ -45,7 +51,24 @@ describe("standing desk storage", () => {
     await expect(getPresets()).resolves.toEqual({ sit: 70, stand: 110 });
   });
 
-  it("replaces invalid saved settings with safe defaults", async () => {
+  it("clears malformed current and legacy desk identifiers", async () => {
+    values.set(
+      "desk.selection",
+      JSON.stringify({ identifier: "not-a-uuid", token: "selection-token" }),
+    );
+    await expect(getDeskSelection()).resolves.toBeUndefined();
+    expect(values.has("desk.selection")).toBe(false);
+
+    values.set("desk.identifier", "still-not-a-uuid");
+    await expect(getDeskSelection()).resolves.toBeUndefined();
+    expect(values.has("desk.identifier")).toBe(false);
+  });
+
+  it("fails closed when saved calibration is invalid", async () => {
+    await selectDeskIdentifier(deskA);
+    const selection = await getDeskSelection();
+    await acknowledgeSafety(selection!.token);
+    values.set(`desk.status.${selection!.token}`, "cached-status");
     values.set(
       "desk.configuration",
       JSON.stringify({
@@ -68,9 +91,12 @@ describe("standing desk storage", () => {
         message: "Base Height cannot exceed Minimum Height.",
       }),
     );
+    await expect(getDeskSelection()).resolves.toBeUndefined();
+    await expect(hasAcknowledgedSafety()).resolves.toBe(false);
+    expect(values.has(`desk.status.${selection!.token}`)).toBe(false);
   });
 
-  it("restores configuration and positions without clearing other data", async () => {
+  it("restores defaults and requires the desk to be selected again", async () => {
     await saveConfiguration({
       deskName: "Office",
       baseHeight: 64,
@@ -80,7 +106,7 @@ describe("standing desk storage", () => {
     });
     await savePreset("sit", 75);
     await savePreset("stand", 105);
-    values.set("desk.identifier", "kept-identifier");
+    await selectDeskIdentifier(deskA);
 
     await expect(restoreDefaultSettings()).resolves.toEqual({
       configuration: {
@@ -92,22 +118,27 @@ describe("standing desk storage", () => {
       },
       presets: { sit: 70, stand: 110 },
     });
-    expect(values.get("desk.identifier")).toBe("kept-identifier");
+    await expect(getDeskSelection()).resolves.toBeUndefined();
   });
 
   it("stores a safe last-known desk status without the Bluetooth identifier", async () => {
-    await saveCachedDeskStatus({
-      heightCm: 109.8,
-      deskName: "Desk 1234",
-      updatedAt: 1_775_000_000_000,
-    });
+    await selectDeskIdentifier(deskA);
+    const selection = await getDeskSelection();
+    await saveCachedDeskStatus(
+      {
+        heightCm: 109.8,
+        deskName: "Desk 1234",
+        updatedAt: 1_775_000_000_000,
+      },
+      selection!.token,
+    );
 
     await expect(getCachedDeskStatus()).resolves.toEqual({
       heightCm: 109.8,
       deskName: "Desk 1234",
       updatedAt: 1_775_000_000_000,
     });
-    expect(values.get("desk.status")).not.toContain("identifier");
+    expect(values.get(`desk.status.${selection!.token}`)).not.toContain(deskA);
   });
 
   it("ignores an invalid cached desk status", async () => {
@@ -120,21 +151,92 @@ describe("standing desk storage", () => {
   });
 
   it("clears the cached height when the selected desk changes", async () => {
-    values.set("desk.identifier", "old-identifier");
-    values.set("desk.status", "cached-status");
+    await selectDeskIdentifier(deskA);
+    const oldSelection = await getDeskSelection();
+    values.set(`desk.status.${oldSelection!.token}`, "cached-status");
 
-    await selectDeskIdentifier("new-identifier");
+    await selectDeskIdentifier(deskB);
 
-    expect(values.get("desk.identifier")).toBe("new-identifier");
-    expect(values.has("desk.status")).toBe(false);
+    await expect(getDeskSelection()).resolves.toMatchObject({
+      identifier: deskB,
+    });
+    expect(values.has(`desk.status.${oldSelection!.token}`)).toBe(false);
   });
 
   it("keeps the cached height when the selected desk does not change", async () => {
-    values.set("desk.identifier", "desk-identifier");
-    values.set("desk.status", "cached-status");
+    await selectDeskIdentifier(deskA);
+    const originalSelection = await getDeskSelection();
+    values.set(`desk.status.${originalSelection!.token}`, "cached-status");
 
-    await selectDeskIdentifier("desk-identifier");
+    await selectDeskIdentifier(deskA);
 
-    expect(values.get("desk.status")).toBe("cached-status");
+    expect(values.get(`desk.status.${originalSelection!.token}`)).toBe(
+      "cached-status",
+    );
+    await expect(getDeskSelection()).resolves.toEqual(originalSelection);
+  });
+
+  it("ignores cached events from an older desk selection", async () => {
+    await selectDeskIdentifier(deskA);
+    const selectionA = await getDeskSelection();
+    await selectDeskIdentifier(deskB);
+    await saveCachedDeskStatus(
+      { heightCm: 90, deskName: "Desk A", updatedAt: 123 },
+      selectionA!.token,
+    );
+
+    await expect(getCachedDeskStatus()).resolves.toBeUndefined();
+    await expect(getDeskSelection()).resolves.toMatchObject({
+      identifier: deskB,
+    });
+  });
+
+  it("does not let an older desk event replace the current desk cache", async () => {
+    await selectDeskIdentifier(deskA);
+    const selectionA = await getDeskSelection();
+    await selectDeskIdentifier(deskB);
+    const selectionB = await getDeskSelection();
+    await saveCachedDeskStatus(
+      { heightCm: 100, deskName: "Desk B", updatedAt: 200 },
+      selectionB!.token,
+    );
+
+    await saveCachedDeskStatus(
+      { heightCm: 90, deskName: "Desk A", updatedAt: 300 },
+      selectionA!.token,
+    );
+
+    await expect(getCachedDeskStatus()).resolves.toEqual({
+      heightCm: 100,
+      deskName: "Desk B",
+      updatedAt: 200,
+    });
+  });
+
+  it("scopes the safety acknowledgement to one desk selection", async () => {
+    await selectDeskIdentifier(deskA);
+    const selectionA = await getDeskSelection();
+    await acknowledgeSafety(selectionA!.token);
+    await expect(hasAcknowledgedSafety(selectionA!.token)).resolves.toBe(true);
+
+    await selectDeskIdentifier(deskB);
+    await expect(hasAcknowledgedSafety()).resolves.toBe(false);
+    await expect(hasAcknowledgedSafety(selectionA!.token)).resolves.toBe(false);
+  });
+
+  it("clears all desk-bound state when the desk is forgotten", async () => {
+    await selectDeskIdentifier(deskA);
+    const selection = await getDeskSelection();
+    await acknowledgeSafety(selection!.token);
+    await saveCachedDeskStatus(
+      { heightCm: 80, updatedAt: 123 },
+      selection!.token,
+    );
+
+    await forgetDeskIdentifier();
+
+    await expect(getDeskSelection()).resolves.toBeUndefined();
+    await expect(getCachedDeskStatus()).resolves.toBeUndefined();
+    await expect(hasAcknowledgedSafety()).resolves.toBe(false);
   });
 });

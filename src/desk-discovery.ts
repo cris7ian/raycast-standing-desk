@@ -53,10 +53,3 @@ export function deskOptionTitle(
       : "Nearby";
   return `${desk.name} · ${state} · ${desk.identifier.slice(-4)}`;
 }
-
-export function shouldPersistNativeIdentifier(
-  event: string,
-  identifier?: string,
-): identifier is string {
-  return event !== "device" && identifier !== undefined;
-}

@@ -1,4 +1,4 @@
-# Standing Desk for Raycast
+# IDÅSEN Desk for Raycast
 
 Control an IKEA IDÅSEN standing desk from Raycast through Bluetooth Low Energy (BLE).
 
@@ -6,7 +6,9 @@ The extension shows the current height, stores Sit and Stand positions, moves to
 
 The menu opens immediately with the last reported height. Sit, Stand, Raise, and Lower run as dedicated commands with visible connection and movement progress. Use **Refresh Height** when you only want a current reading.
 
-![Standing Desk extension icon](assets/extension-icon.png)
+The extension is self-contained. It does not require Python, Bluetility, or a manually copied Bluetooth identifier.
+
+![IDÅSEN Desk extension icon](assets/idasen-desk-icon.png)
 
 ## Commands
 
@@ -14,7 +16,6 @@ The menu opens immediately with the last reported height. Sit, Stand, Raise, and
 | -------------------------------- | ---------------------------------------------------- |
 | **Standing Desk Menu**           | Opens height and controls from a menu-bar icon.      |
 | **Manage Standing Desk**         | Opens the complete control view.                     |
-| **Desk Settings**                | Edits settings or restores safe defaults.            |
 | **Move Desk to Sit**             | Moves to the saved Sit position.                     |
 | **Move Desk to Stand**           | Moves to the saved Stand position.                   |
 | **Raise Desk**                   | Raises the desk by the configured step.              |
@@ -29,26 +30,22 @@ The management view also supports a custom target height, settings, diagnostics,
 
 - macOS with Bluetooth enabled.
 - [Raycast](https://www.raycast.com/).
-- Node.js 22 or later.
-- Xcode Command Line Tools.
 - An IKEA IDÅSEN or compatible LINAK desk controller.
 
 ## Install
 
-1. Clone this repository.
-2. Run `npm install`.
-3. Run `npm run dev`.
-4. Approve Bluetooth access when macOS asks.
-5. Hold the desk Bluetooth button until its light flashes.
-6. Open **Manage Standing Desk** or **Standing Desk Menu** in Raycast.
+1. Install **IDÅSEN Desk** from the Raycast Store.
+2. Approve Bluetooth access when macOS asks.
+3. Hold the desk Bluetooth button until its light flashes.
+4. Open **Manage Standing Desk**, then open **Desk Settings** and select the desk.
 
-`npm run dev` compiles a signed universal helper for Apple silicon and Intel Macs. Raycast keeps the development extension after the process stops.
+Contributors can find local setup and build requirements in [Development](docs/DEVELOPMENT.md).
 
 ## First use
 
-The first movement action shows a safety confirmation. Watch the desk during every movement and keep its path clear.
+The first movement action for each selected desk shows a safety confirmation. Watch the desk during every movement and keep its path clear.
 
-Open **Desk Settings** and select the desk from the **Desk** dropdown. The extension remembers its macOS CoreBluetooth identifier for future connections.
+Open **Desk Settings** from **Manage Standing Desk**. Select the desk from the **Desk** dropdown. The extension remembers its macOS CoreBluetooth identifier for future connections.
 
 The dropdown includes the remembered desk, compatible devices already connected to macOS, and nearby advertising devices whose names match the discovery filter. Hold the desk Bluetooth button until its light flashes, then use **Scan for Desks** when the desk is absent. Discovery does not connect to or move the desk.
 
@@ -60,7 +57,7 @@ Open **Desk Settings** from **Manage Standing Desk** to change:
 
 Saved Sit and Stand heights remain in Raycast local storage.
 
-Use **Restore Default Settings** to reset the range to `62–127 cm`, the step to `1 cm`, Sit to `70 cm`, and Stand to `110 cm`.
+Use **Restore Default Settings** to reset the range to `62–127 cm`, the step to `1 cm`, Sit to `70 cm`, and Stand to `110 cm`. Select the desk again after restoring defaults.
 
 Use **Diagnostic Log** to reveal the bounded extension log in Finder. The log records native command outcomes without storing the Bluetooth desk identifier.
 

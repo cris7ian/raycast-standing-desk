@@ -6,7 +6,7 @@
 2. Hold the desk Bluetooth button until its light flashes.
 3. Move the Mac within 8 meters of the desk.
 4. Quit other desk-control applications.
-5. Open **Desk Settings**.
+5. Open **Manage Standing Desk**, then open **Desk Settings**.
 6. Select **Scan for Desks**.
 7. Select the desk from the **Desk** dropdown.
 
@@ -22,7 +22,7 @@ The menu displays the last reported height without connecting first. Select **Re
 
 ## Bluetooth access is denied
 
-Open **System Settings > Privacy & Security > Bluetooth**. Enable access for **Standing Desk Bluetooth Helper**.
+Open **System Settings > Privacy & Security > Bluetooth**. Enable access for **IDÅSEN Desk Bluetooth Helper**.
 
 If the helper is absent, run **Manage Standing Desk** once to trigger the permission request.
 
@@ -41,7 +41,7 @@ Open **Manage Standing Desk**, then open **Desk Settings**. Check these constrai
 - Sit and Stand heights must remain inside the configured range.
 - Raise and Lower Step must be greater than `0 cm` and at most `20 cm`.
 
-Use **Restore Default Settings** when the saved values are not usable. This restores the `62–127 cm` range, `70 cm` Sit position, `110 cm` Stand position, and `1 cm` step.
+Use **Restore Default Settings** when the saved values are not usable. This restores the `62–127 cm` range, `70 cm` Sit position, `110 cm` Stand position, and `1 cm` step. Select the desk and review the safety notice again.
 
 ## Inspect diagnostic logs
 

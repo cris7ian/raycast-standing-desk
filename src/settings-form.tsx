@@ -16,15 +16,13 @@ import {
   mergeDiscoveredDesk,
   rememberedSelectionForRescan,
 } from "./desk-discovery";
+import { restoreDefaultDeskSession, saveDeskSession } from "./desk-session";
 import { parseHeight, validateConfiguration, validateTarget } from "./model";
 import { discoverDesks } from "./native";
 import {
   DeskSettings,
   getCachedDeskStatus,
   getDeskIdentifier,
-  restoreDefaultSettings,
-  saveSettings,
-  selectDeskIdentifier,
 } from "./storage";
 
 const NO_DESK = "no-desk";
@@ -57,7 +55,7 @@ export default function SettingsForm({
   popAfterSave = true,
 }: {
   initialSettings: DeskSettings;
-  onSaved: (settings: DeskSettings) => void;
+  onSaved: (settings: DeskSettings, hasSelectedDesk: boolean) => void;
   popAfterSave?: boolean;
 }) {
   const { pop } = useNavigation();
@@ -169,12 +167,9 @@ export default function SettingsForm({
         );
       }
       const settings = parseSettings();
-      await Promise.all([
-        saveSettings(settings),
-        selectDeskIdentifier(selectedIdentifier),
-      ]);
+      await saveDeskSession(settings, selectedIdentifier);
       setRememberedIdentifier(selectedIdentifier);
-      onSaved(settings);
+      onSaved(settings, true);
       if (popAfterSave) pop();
       await showToast({
         style: Toast.Style.Success,
@@ -193,7 +188,7 @@ export default function SettingsForm({
     const confirmed = await confirmAlert({
       title: "Restore default settings?",
       message:
-        "This resets desk limits, adjustment step, and Sit and Stand positions. It keeps the connected desk and safety acknowledgement.",
+        "This resets desk limits, adjustment step, and Sit and Stand positions. You must select the desk and review the safety notice again.",
       primaryAction: {
         title: "Restore Defaults",
         style: Alert.ActionStyle.Destructive,
@@ -205,20 +200,36 @@ export default function SettingsForm({
     });
     if (!confirmed) return;
 
-    const settings = await restoreDefaultSettings();
-    setValues(formValues(settings));
-    setError(undefined);
-    onSaved(settings);
-    await showToast({
-      style: Toast.Style.Success,
-      title: "Restored default settings",
-      message: "Sit 70 cm · Stand 110 cm · Range 62–127 cm",
-    });
+    try {
+      const settings = await restoreDefaultDeskSession();
+      setRememberedIdentifier(undefined);
+      setSelectedIdentifier(NO_DESK);
+      setDesks([]);
+      setValues(formValues(settings));
+      setError(undefined);
+      onSaved(settings, false);
+      await showToast({
+        style: Toast.Style.Success,
+        title: "Restored default settings",
+        message: "Sit 70 cm · Stand 110 cm · Range 62–127 cm",
+      });
+    } catch (restoreError) {
+      const message =
+        restoreError instanceof Error
+          ? restoreError.message
+          : String(restoreError);
+      setError(message);
+      await showToast({
+        style: Toast.Style.Failure,
+        title: "Could not restore settings",
+        message,
+      });
+    }
   }
 
   return (
     <Form
-      navigationTitle="Desk Settings"
+      navigationTitle={popAfterSave ? "Desk Settings" : undefined}
       actions={
         <ActionPanel>
           <Action.SubmitForm
@@ -276,6 +287,7 @@ export default function SettingsForm({
       <Form.TextField
         id="deskName"
         title="Discovery Name Filter"
+        placeholder="Desk"
         value={values.deskName}
         onChange={(value) => update("deskName", value)}
       />
@@ -283,24 +295,28 @@ export default function SettingsForm({
       <Form.TextField
         id="baseHeight"
         title="Base Height"
+        placeholder="62"
         value={values.baseHeight}
         onChange={(value) => update("baseHeight", value)}
       />
       <Form.TextField
         id="minimumHeight"
         title="Minimum Height"
+        placeholder="62"
         value={values.minimumHeight}
         onChange={(value) => update("minimumHeight", value)}
       />
       <Form.TextField
         id="maximumHeight"
         title="Maximum Height"
+        placeholder="127"
         value={values.maximumHeight}
         onChange={(value) => update("maximumHeight", value)}
       />
       <Form.TextField
         id="stepHeight"
         title="Raise and Lower Step"
+        placeholder="1"
         value={values.stepHeight}
         onChange={(value) => update("stepHeight", value)}
       />
@@ -308,12 +324,14 @@ export default function SettingsForm({
       <Form.TextField
         id="sitHeight"
         title="Sit Height"
+        placeholder="70"
         value={values.sitHeight}
         onChange={(value) => update("sitHeight", value)}
       />
       <Form.TextField
         id="standHeight"
         title="Stand Height"
+        placeholder="110"
         value={values.standHeight}
         onChange={(value) => update("standHeight", value)}
       />

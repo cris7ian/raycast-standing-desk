@@ -26,6 +26,15 @@ describe("standing desk model", () => {
     expect(parseHeight("99,5", "Height")).toBe(99.5);
   });
 
+  it("rejects blank heights instead of parsing them as zero", () => {
+    expect(() => parseHeight("", "Base Height")).toThrow(
+      "Base Height must be a number",
+    );
+    expect(() => parseHeight("   ", "Base Height")).toThrow(
+      "Base Height must be a number",
+    );
+  });
+
   it("rejects targets outside the configured range", () => {
     expect(() => validateTarget(61.9, configuration)).toThrow(
       "between 62.0 cm and 127.0 cm",
@@ -44,6 +53,12 @@ describe("standing desk model", () => {
     expect(() =>
       validateConfiguration({ ...configuration, minimumHeight: 130 }),
     ).toThrow("Minimum Height must be lower than Maximum Height");
+  });
+
+  it("rejects non-positive desk geometry", () => {
+    expect(() =>
+      validateConfiguration({ ...configuration, baseHeight: 0 }),
+    ).toThrow("must be above 0 cm");
   });
 
   it("formats centimeters consistently", () => {

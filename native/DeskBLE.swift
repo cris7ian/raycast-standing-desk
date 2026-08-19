@@ -19,6 +19,11 @@ private enum DeskOperation {
     case selfTest
 }
 
+private enum ControlWritePurpose {
+    case movementSetup
+    case finalStop(String)
+}
+
 private struct Options {
     let operation: DeskOperation
     var deskName = "Desk"
@@ -88,6 +93,19 @@ private func isDiscoveryCandidate(
         return true
     }
     return advertisedServices.contains(controlServiceUUID)
+}
+
+private func nudgedTarget(
+    currentHeight: Double,
+    delta: Double,
+    minimumHeight: Double,
+    maximumHeight: Double
+) -> Double? {
+    let proposed = currentHeight + delta
+    let clamped = min(max(proposed, minimumHeight), maximumHeight)
+    if delta > 0, clamped < currentHeight { return nil }
+    if delta < 0, clamped > currentHeight { return nil }
+    return clamped
 }
 
 private func parseOptions(_ arguments: [String]) throws -> Options {
@@ -179,6 +197,33 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
     guard options.minimumHeight < options.maximumHeight else {
         throw ArgumentError.message("Minimum height must be lower than maximum height.")
     }
+    switch options.operation {
+    case .move, .nudge:
+        guard options.identifier != nil,
+              options.cancelFile?.isEmpty == false,
+              options.lockFile?.isEmpty == false,
+              options.movementRequestID != nil
+        else {
+            throw ArgumentError.message(
+                "Movement requires a selected desk, cancellation file, movement lock, and request identifier."
+            )
+        }
+    case .status:
+        guard options.identifier != nil else {
+            throw ArgumentError.message("Status requires a selected desk.")
+        }
+    case .stop:
+        guard options.identifier != nil,
+              options.cancelFile?.isEmpty == false,
+              options.movementRequestID != nil
+        else {
+            throw ArgumentError.message(
+                "Stop requires a selected desk, cancellation file, and request identifier."
+            )
+        }
+    case .discover, .selfTest:
+        break
+    }
     return options
 }
 
@@ -269,6 +314,9 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     private var stableTargetReadings = 0
     private var stationaryReadings = 0
     private var movementStartedAt: Date?
+    private var pendingControlWrites: [ControlWritePurpose] = []
+    private var finalStopPending = false
+    private var stopCompletionWorkItem: DispatchWorkItem?
     private var operationStarted = false
     private var finishing = false
     private var discoveredIdentifiers: [UUID: DiscoveredPeripheralState] = [:]
@@ -333,7 +381,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
                 findDesk()
             }
         case .unauthorized:
-            fail("Bluetooth access is denied. Allow Standing Desk Bluetooth Helper in System Settings > Privacy & Security > Bluetooth.")
+            fail("Bluetooth access is denied. Allow IDÅSEN Desk Bluetooth Helper in System Settings > Privacy & Security > Bluetooth.")
         case .poweredOff:
             fail("Bluetooth is turned off.")
         case .unsupported:
@@ -547,17 +595,14 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             connectionTimeoutWorkItem?.cancel()
             peripheral.readValue(for: outputCharacteristic)
         case .stop:
-            guard let controlCharacteristic else { return }
+            guard controlCharacteristic != nil else { return }
             if movementWasReplaced() {
                 complete(outcome: "stopped", reading: lastReading)
                 return
             }
             operationStarted = true
             connectionTimeoutWorkItem?.cancel()
-            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-                self?.complete(outcome: "stopped", reading: self?.lastReading)
-            }
+            stopAndComplete(outcome: "stopped")
         case .move, .nudge:
             guard controlCharacteristic != nil, inputCharacteristic != nil, let outputCharacteristic else { return }
             operationStarted = true
@@ -601,9 +646,16 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             }
         case let .nudge(delta):
             if targetHeight == nil {
-                let proposed = reading.heightCm + delta
-                let clamped = min(max(proposed, options.minimumHeight), options.maximumHeight)
-                beginMovement(to: clamped, from: reading)
+                guard let target = nudgedTarget(
+                    currentHeight: reading.heightCm,
+                    delta: delta,
+                    minimumHeight: options.minimumHeight,
+                    maximumHeight: options.maximumHeight
+                ) else {
+                    fail("The requested adjustment would move the desk in the opposite direction. Check the configured limits.")
+                    return
+                }
+                beginMovement(to: target, from: reading)
             } else {
                 evaluateMovement(reading, previous: previousReading)
             }
@@ -613,6 +665,26 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     }
 
     func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        if characteristic == controlCharacteristic, !pendingControlWrites.isEmpty {
+            let purpose = pendingControlWrites.removeFirst()
+            guard !finishing else { return }
+            switch purpose {
+            case .movementSetup:
+                if let error {
+                    fail("The desk rejected a movement command: \(error.localizedDescription).")
+                }
+            case let .finalStop(outcome):
+                finalStopPending = false
+                stopCompletionWorkItem?.cancel()
+                stopCompletionWorkItem = nil
+                if let error {
+                    fail("The desk rejected the stop command: \(error.localizedDescription).")
+                } else {
+                    complete(outcome: outcome, reading: lastReading)
+                }
+            }
+            return
+        }
         if let error, !finishing {
             fail("The desk rejected a movement command: \(error.localizedDescription).")
         }
@@ -620,7 +692,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
 
     private func beginMovement(to requestedHeight: Double, from reading: Reading) {
         if movementWasReplaced() {
-            complete(outcome: "stopped", reading: reading)
+            stopAndComplete(outcome: "stopped")
             return
         }
         guard requestedHeight >= options.minimumHeight, requestedHeight <= options.maximumHeight else {
@@ -636,7 +708,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         movementStartedAt = Date()
 
         if abs(reading.heightCm - requestedHeight) <= 0.25 {
-            complete(outcome: "reached", reading: reading)
+            stopAndComplete(outcome: "reached")
             return
         }
 
@@ -644,8 +716,8 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             fail("Desk movement controls are unavailable.")
             return
         }
-        peripheral.writeValue(Data([0xfe, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
-        peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+        writeControl(Data([0xfe, 0x00]), purpose: .movementSetup, peripheral: peripheral, characteristic: controlCharacteristic)
+        writeControl(Data([0xff, 0x00]), purpose: .movementSetup, peripheral: peripheral, characteristic: controlCharacteristic)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
             self?.sendTarget()
             self?.movementTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
@@ -702,18 +774,46 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
     }
 
+    private func writeControl(
+        _ data: Data,
+        purpose: ControlWritePurpose,
+        peripheral: CBPeripheral,
+        characteristic: CBCharacteristic
+    ) {
+        let type = writeType(for: characteristic)
+        if type == .withResponse {
+            pendingControlWrites.append(purpose)
+        }
+        peripheral.writeValue(data, for: characteristic, type: type)
+    }
+
     private func stopAndComplete(outcome: String) {
-        guard !finishing else { return }
+        guard !finishing, !finalStopPending else { return }
         movementTimer?.invalidate()
         movementTimer = nil
         cancellationTimer?.invalidate()
         cancellationTimer = nil
-        finishing = true
-        if let peripheral, let controlCharacteristic {
-            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+        guard let peripheral, let controlCharacteristic else {
+            complete(outcome: outcome, reading: lastReading)
+            return
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.complete(outcome: outcome, reading: self?.lastReading, alreadyFinishing: true)
+        let type = writeType(for: controlCharacteristic)
+        if type == .withResponse {
+            finalStopPending = true
+            let workItem = DispatchWorkItem { [weak self] in
+                guard let self, self.finalStopPending else { return }
+                self.finalStopPending = false
+                self.fail("The desk did not acknowledge the stop command.")
+            }
+            stopCompletionWorkItem = workItem
+            writeControl(Data([0xff, 0x00]), purpose: .finalStop(outcome), peripheral: peripheral, characteristic: controlCharacteristic)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: workItem)
+        } else {
+            finishing = true
+            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: type)
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.complete(outcome: outcome, reading: self?.lastReading, alreadyFinishing: true)
+            }
         }
     }
 
@@ -722,6 +822,8 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         finishing = true
         movementTimer?.invalidate()
         cancellationTimer?.invalidate()
+        stopCompletionWorkItem?.cancel()
+        finalStopPending = false
         var payload: [String: Any] = [
             "event": "complete",
             "connected": peripheral?.state == .connected,
@@ -744,7 +846,9 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         finishing = true
         movementTimer?.invalidate()
         cancellationTimer?.invalidate()
-        if let peripheral, let controlCharacteristic, targetHeight != nil {
+        stopCompletionWorkItem?.cancel()
+        finalStopPending = false
+        if let peripheral, let controlCharacteristic, options.operation.isMovement {
             peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
         }
         emit(["event": "error", "message": message])
@@ -769,10 +873,15 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
             source.setEventHandler { [weak self] in
                 guard let self else { return }
-                if self.options.operation.isDiscovery {
+                switch self.options.operation {
+                case .discover:
                     self.completeDiscovery()
-                } else {
+                case .status:
+                    self.complete(outcome: nil, reading: self.lastReading)
+                case .move, .nudge, .stop:
                     self.stopAndComplete(outcome: "stopped")
+                case .selfTest:
+                    break
                 }
             }
             source.resume()
@@ -807,7 +916,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
 
     private func cancelIfReplaced() {
         guard !finishing, movementWasReplaced() else { return }
-        if targetHeight != nil {
+        if options.operation.isMovement {
             stopAndComplete(outcome: "stopped")
         } else {
             complete(outcome: "stopped", reading: lastReading)
@@ -826,6 +935,15 @@ private extension DeskOperation {
     var isDiscovery: Bool {
         if case .discover = self { return true }
         return false
+    }
+
+    var isMovement: Bool {
+        switch self {
+        case .move, .nudge:
+            true
+        default:
+            false
+        }
     }
 }
 
@@ -870,6 +988,36 @@ private func runSelfTests() -> Bool {
         advertisedServices: [],
         nameFilter: "desk"
     ) else { return false }
+    guard nudgedTarget(currentHeight: 128, delta: 1, minimumHeight: 62, maximumHeight: 127) == nil else {
+        return false
+    }
+    guard nudgedTarget(currentHeight: 128, delta: -1, minimumHeight: 62, maximumHeight: 127) == 127 else {
+        return false
+    }
+    guard nudgedTarget(currentHeight: 61, delta: -1, minimumHeight: 62, maximumHeight: 127) == nil else {
+        return false
+    }
+
+    guard (try? parseOptions(["move", "70"])) == nil else { return false }
+    guard (try? parseOptions(["nudge", "1"])) == nil else { return false }
+    guard (try? parseOptions(["status"])) == nil else { return false }
+    guard (try? parseOptions(["stop"])) == nil else { return false }
+    let safetyArguments = [
+        "--identifier", "11111111-1111-1111-1111-111111111111",
+        "--cancel-file", "/tmp/standing-desk-self-test-request",
+        "--lock-file", "/tmp/standing-desk-self-test-lock",
+        "--movement-request-id", "22222222-2222-2222-2222-222222222222",
+    ]
+    guard (try? parseOptions(["move", "70"] + safetyArguments))?.operation.isMovement == true else {
+        return false
+    }
+    guard (try? parseOptions(["nudge", "1"] + safetyArguments))?.operation.isMovement == true else {
+        return false
+    }
+    guard (try? parseOptions(["stop"] + safetyArguments)) != nil else { return false }
+    guard (try? parseOptions([
+        "status", "--identifier", "11111111-1111-1111-1111-111111111111",
+    ])) != nil else { return false }
 
     let testDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent("standing-desk-self-test-\(UUID().uuidString)")
