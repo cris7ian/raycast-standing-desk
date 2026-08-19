@@ -6,9 +6,13 @@
 2. Hold the desk Bluetooth button until its light flashes.
 3. Move the Mac within 8 meters of the desk.
 4. Quit other desk-control applications.
-5. Use **Forget Connected Desk** before selecting another desk.
+5. Open **Desk Settings**.
+6. Select **Scan for Desks**.
+7. Select the desk from the **Desk** dropdown.
 
-The default scan matches Bluetooth names containing `Desk`. Open **Desk Settings** in **Manage Standing Desk** to change the filter.
+The scan also includes the remembered desk and compatible devices already connected to macOS. The fallback scan matches Bluetooth names containing `Desk`. Change **Discovery Name Filter** when the desk uses another name.
+
+Discovery does not connect to or move the desk. The first status or movement command validates the selected device's Bluetooth services.
 
 ## Menu closes after selecting a position
 

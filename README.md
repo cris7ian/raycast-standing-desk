@@ -48,11 +48,13 @@ The management view also supports a custom target height, settings, diagnostics,
 
 The first movement action shows a safety confirmation. Watch the desk during every movement and keep its path clear.
 
-The extension finds the first device whose Bluetooth name contains `Desk`. It then stores the macOS Bluetooth identifier. Use **Forget Connected Desk** to select another desk.
+Open **Desk Settings** and select the desk from the **Desk** dropdown. The extension remembers its macOS CoreBluetooth identifier for future connections.
+
+The dropdown includes the remembered desk, compatible devices already connected to macOS, and nearby advertising devices whose names match the discovery filter. Hold the desk Bluetooth button until its light flashes, then use **Scan for Desks** when the desk is absent. Discovery does not connect to or move the desk.
 
 Open **Desk Settings** from **Manage Standing Desk** to change:
 
-- Bluetooth name filter.
+- Desk selection and discovery name filter.
 - Base, minimum, and maximum heights.
 - Raise and Lower step size.
 

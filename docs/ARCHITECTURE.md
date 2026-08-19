@@ -38,7 +38,7 @@ The Sit, Stand, Raise, Lower, Stop, Save Sit, and Save Stand entry points call s
 
 ### Domain and persistence
 
-`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores settings, presets, the selected desk identifier, the last reported height, and the safety acknowledgement through Raycast `LocalStorage`.
+`src/model.ts` defines safe defaults and validates configuration and target heights. `src/storage.ts` stores settings, presets, the selected desk identifier, the last reported height, and the safety acknowledgement through Raycast `LocalStorage`. Selecting another desk clears the cached height from the previous desk.
 
 ### Native process bridge
 
@@ -51,7 +51,9 @@ The bridge uses two support files:
 
 ### Bluetooth helper
 
-`native/DeskBLE.swift` discovers the desk, connects, resolves required characteristics, reads height, and sends movement commands. It emits `status`, `progress`, `complete`, and `error` events as JSON lines.
+`native/DeskBLE.swift` discovers nearby desks, connects to the selected desk, resolves required characteristics, reads height, and sends movement commands. It emits `device`, `status`, `progress`, `complete`, and `error` events as JSON lines.
+
+The `discover` operation runs for five seconds. It reports the remembered peripheral, compatible peripherals connected to macOS, and nearby advertisements matching the desk service or name filter. It does not connect to a peripheral or write Bluetooth characteristics.
 
 `scripts/build-native.sh` compiles `arm64` and `x86_64` executables. It combines them with `lipo`, embeds `native/Info.plist`, and applies an ad-hoc signature.
 

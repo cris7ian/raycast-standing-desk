@@ -40,9 +40,17 @@ Bytes three and four contain signed little-endian speed. The helper divides the 
 
 ## Discovery
 
-The first connection scans nearby peripherals for a case-insensitive name match. The default filter is `Desk`.
+**Desk Settings** runs a bounded five-second scan without connecting to a peripheral. The dropdown combines these sources:
 
-After connection, the extension stores the macOS CoreBluetooth UUID. Future runs retrieve that peripheral directly. This UUID is local to macOS and is not the desk MAC address.
+- The desk identifier already stored by the extension.
+- System-connected peripherals that expose the LINAK control service.
+- Nearby advertisements that expose the control service or match the discovery name filter.
+
+CoreBluetooth does not provide a complete list of paired Bluetooth devices. A discovered advertisement is therefore a possible desk until the first connection validates its services.
+
+The fallback name match is case-insensitive. Its default value is `Desk`.
+
+Saving settings stores the selected desk's macOS CoreBluetooth UUID. Future runs retrieve that peripheral directly. This UUID is local to macOS and is not the desk MAC address.
 
 ## Protocol changes
 

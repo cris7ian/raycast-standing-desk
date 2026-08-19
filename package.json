@@ -26,7 +26,7 @@
     {
       "name": "desk-settings",
       "title": "Desk Settings",
-      "description": "Edit desk limits and positions or restore safe defaults",
+      "description": "Select a Bluetooth desk and edit its limits and positions",
       "mode": "view"
     },
     {

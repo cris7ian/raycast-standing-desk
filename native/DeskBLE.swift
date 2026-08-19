@@ -11,6 +11,7 @@ private let inputCharacteristicUUID = CBUUID(string: "99FA0031-338A-1024-8A49-00
 private let movementHandoffTimeout = 5.0
 
 private enum DeskOperation {
+    case discover
     case status
     case move(Double)
     case nudge(Double)
@@ -29,6 +30,7 @@ private struct Options {
     var lockFile: String?
     var movementRequestID: String?
     var connectionTimeout = 12.0
+    var discoveryTimeout = 5.0
     var movementTimeout = 45.0
 }
 
@@ -45,6 +47,11 @@ private enum ArgumentError: LocalizedError {
 private struct Reading {
     let heightCm: Double
     let speed: Double
+}
+
+private struct DiscoveredPeripheralState {
+    let connected: Bool
+    let nameQuality: Int
 }
 
 private func rawTarget(for heightCm: Double, baseHeight: Double) -> UInt16? {
@@ -68,14 +75,31 @@ private func littleEndianData(_ value: UInt16) -> Data {
     Data([UInt8(value & 0x00ff), UInt8((value & 0xff00) >> 8)])
 }
 
+private func isDiscoveryCandidate(
+    peripheralName: String?,
+    advertisedName: String?,
+    advertisedServices: [CBUUID],
+    nameFilter: String
+) -> Bool {
+    if [peripheralName, advertisedName]
+        .compactMap({ $0 })
+        .contains(where: { $0.localizedCaseInsensitiveContains(nameFilter) })
+    {
+        return true
+    }
+    return advertisedServices.contains(controlServiceUUID)
+}
+
 private func parseOptions(_ arguments: [String]) throws -> Options {
     guard let command = arguments.first else {
-        throw ArgumentError.message("Expected one of: status, move, nudge, stop, self-test.")
+        throw ArgumentError.message("Expected one of: discover, status, move, nudge, stop, self-test.")
     }
 
     var index = 1
     let operation: DeskOperation
     switch command {
+    case "discover":
+        operation = .discover
     case "status":
         operation = .status
     case "move":
@@ -136,6 +160,11 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
                 throw ArgumentError.message("Invalid connection timeout.")
             }
             options.connectionTimeout = timeout
+        case "--discovery-timeout":
+            guard let timeout = Double(value), timeout > 0 else {
+                throw ArgumentError.message("Invalid discovery timeout.")
+            }
+            options.discoveryTimeout = timeout
         case "--movement-timeout":
             guard let timeout = Double(value), timeout > 0 else {
                 throw ArgumentError.message("Invalid movement timeout.")
@@ -242,6 +271,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     private var movementStartedAt: Date?
     private var operationStarted = false
     private var finishing = false
+    private var discoveredIdentifiers: [UUID: DiscoveredPeripheralState] = [:]
     private var movementLock: MovementLock?
     private var signalSources: [DispatchSourceSignal] = []
 
@@ -278,11 +308,13 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
 
     func start() {
         installSignalHandlers()
-        let workItem = DispatchWorkItem { [weak self] in
-            self?.fail("Timed out while connecting to the desk. Put it in pairing mode and quit other desk-control apps.")
+        if !options.operation.isDiscovery {
+            let workItem = DispatchWorkItem { [weak self] in
+                self?.fail("Timed out while connecting to the desk. Put it in pairing mode and quit other desk-control apps.")
+            }
+            connectionTimeoutWorkItem = workItem
+            DispatchQueue.main.asyncAfter(deadline: .now() + options.connectionTimeout, execute: workItem)
         }
-        connectionTimeoutWorkItem = workItem
-        DispatchQueue.main.asyncAfter(deadline: .now() + options.connectionTimeout, execute: workItem)
         central = CBCentralManager(delegate: self, queue: .main)
         if shouldMonitorMovementRequest {
             cancellationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
@@ -295,7 +327,11 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     func centralManagerDidUpdateState(_ central: CBCentralManager) {
         switch central.state {
         case .poweredOn:
-            findDesk()
+            if options.operation.isDiscovery {
+                startDiscovery()
+            } else {
+                findDesk()
+            }
         case .unauthorized:
             fail("Bluetooth access is denied. Allow Standing Desk Bluetooth Helper in System Settings > Privacy & Security > Bluetooth.")
         case .poweredOff:
@@ -307,6 +343,32 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         @unknown default:
             fail("Bluetooth entered an unsupported state.")
         }
+    }
+
+    private func startDiscovery() {
+        guard !operationStarted else { return }
+        operationStarted = true
+        let workItem = DispatchWorkItem { [weak self] in self?.completeDiscovery() }
+        connectionTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + options.discoveryTimeout, execute: workItem)
+        findDesks()
+    }
+
+    private func findDesks() {
+        if let identifier = options.identifier,
+           let rememberedDesk = central.retrievePeripherals(withIdentifiers: [identifier]).first
+        {
+            emitDiscoveredDesk(rememberedDesk, connected: rememberedDesk.state == .connected)
+        }
+
+        for connectedDesk in central.retrieveConnectedPeripherals(withServices: [controlServiceUUID]) {
+            emitDiscoveredDesk(connectedDesk, connected: true)
+        }
+
+        central.scanForPeripherals(
+            withServices: nil,
+            options: [CBCentralManagerScanOptionAllowDuplicatesKey: false]
+        )
     }
 
     private func findDesk() {
@@ -340,8 +402,74 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         advertisementData: [String: Any],
         rssi RSSI: NSNumber
     ) {
+        if options.operation.isDiscovery {
+            guard matchesDiscoveryCandidate(peripheral, advertisementData: advertisementData) else { return }
+            let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+            emitDiscoveredDesk(
+                peripheral,
+                connected: peripheral.state == .connected,
+                advertisedName: advertisedName
+            )
+            return
+        }
         guard self.peripheral == nil, matchesDesk(peripheral) else { return }
         connect(peripheral)
+    }
+
+    private func matchesDiscoveryCandidate(
+        _ candidate: CBPeripheral,
+        advertisementData: [String: Any]
+    ) -> Bool {
+        let advertisedName = advertisementData[CBAdvertisementDataLocalNameKey] as? String
+        let advertisedServices = advertisementData[CBAdvertisementDataServiceUUIDsKey] as? [CBUUID] ?? []
+        return isDiscoveryCandidate(
+            peripheralName: candidate.name,
+            advertisedName: advertisedName,
+            advertisedServices: advertisedServices,
+            nameFilter: options.deskName
+        )
+    }
+
+    private func emitDiscoveredDesk(
+        _ desk: CBPeripheral,
+        connected: Bool,
+        advertisedName: String? = nil
+    ) {
+        let reportedName = advertisedName ?? desk.name
+        let nameQuality = advertisedName != nil ? 2 : desk.name != nil ? 1 : 0
+        let incoming = DiscoveredPeripheralState(
+            connected: connected,
+            nameQuality: nameQuality
+        )
+        if let previous = discoveredIdentifiers[desk.identifier] {
+            let improvesConnection = connected && !previous.connected
+            let improvesName = incoming.nameQuality > previous.nameQuality
+            guard improvesConnection || improvesName else { return }
+            discoveredIdentifiers[desk.identifier] = DiscoveredPeripheralState(
+                connected: previous.connected || connected,
+                nameQuality: max(previous.nameQuality, incoming.nameQuality)
+            )
+        } else {
+            discoveredIdentifiers[desk.identifier] = incoming
+        }
+        emit([
+            "event": "device",
+            "connected": discoveredIdentifiers[desk.identifier]?.connected == true,
+            "deskName": reportedName ?? options.deskName,
+            "identifier": desk.identifier.uuidString,
+            "nameQuality": nameQuality,
+        ])
+    }
+
+    private func completeDiscovery() {
+        guard !finishing else { return }
+        finishing = true
+        central.stopScan()
+        emit([
+            "event": "complete",
+            "message": "Found \(discoveredIdentifiers.count) nearby desk\(discoveredIdentifiers.count == 1 ? "" : "s").",
+        ])
+        shutdown(code: 0)
     }
 
     private func connect(_ desk: CBPeripheral) {
@@ -411,6 +539,8 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     private func startOperationWhenReady() {
         guard !operationStarted, let peripheral else { return }
         switch options.operation {
+        case .discover:
+            return
         case .status:
             guard let outputCharacteristic else { return }
             operationStarted = true
@@ -477,7 +607,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             } else {
                 evaluateMovement(reading, previous: previousReading)
             }
-        case .stop, .selfTest:
+        case .discover, .stop, .selfTest:
             break
         }
     }
@@ -638,7 +768,12 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             signal(signalNumber, SIG_IGN)
             let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
             source.setEventHandler { [weak self] in
-                self?.stopAndComplete(outcome: "stopped")
+                guard let self else { return }
+                if self.options.operation.isDiscovery {
+                    self.completeDiscovery()
+                } else {
+                    self.stopAndComplete(outcome: "stopped")
+                }
             }
             source.resume()
             signalSources.append(source)
@@ -687,6 +822,13 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     }
 }
 
+private extension DeskOperation {
+    var isDiscovery: Bool {
+        if case .discover = self { return true }
+        return false
+    }
+}
+
 private func emit(_ payload: [String: Any]) {
     guard JSONSerialization.isValidJSONObject(payload),
           let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
@@ -706,6 +848,28 @@ private func runSelfTests() -> Bool {
     guard abs(reading.heightCm - 70) < 0.001 else { return false }
     guard abs(reading.speed - (-1)) < 0.001 else { return false }
     guard littleEndianData(4_800) == Data([0xc0, 0x12]) else { return false }
+    guard (try? parseOptions(["discover", "--discovery-timeout", "1"]))?.operation.isDiscovery == true else {
+        return false
+    }
+    guard (try? parseOptions(["discover", "--discovery-timeout", "0"])) == nil else { return false }
+    guard isDiscoveryCandidate(
+        peripheralName: nil,
+        advertisedName: "Desk 1234",
+        advertisedServices: [],
+        nameFilter: "desk"
+    ) else { return false }
+    guard isDiscoveryCandidate(
+        peripheralName: "Office",
+        advertisedName: nil,
+        advertisedServices: [controlServiceUUID],
+        nameFilter: "desk"
+    ) else { return false }
+    guard !isDiscoveryCandidate(
+        peripheralName: "Headphones",
+        advertisedName: nil,
+        advertisedServices: [],
+        nameFilter: "desk"
+    ) else { return false }
 
     let testDirectory = FileManager.default.temporaryDirectory
         .appendingPathComponent("standing-desk-self-test-\(UUID().uuidString)")
