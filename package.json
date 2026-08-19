@@ -53,6 +53,13 @@
   ],
   "commands": [
     {
+      "name": "desk-menu",
+      "title": "Standing Desk Menu",
+      "description": "Control the desk and see its height from the menu bar",
+      "mode": "menu-bar",
+      "interval": "1m"
+    },
+    {
       "name": "manage-desk",
       "title": "Manage Standing Desk",
       "description": "View the height and control every desk action",
