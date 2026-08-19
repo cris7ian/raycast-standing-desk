@@ -27,7 +27,8 @@ The extension implements these independent safeguards:
 - Configurable minimum and maximum target heights.
 - A first-use safety acknowledgement.
 - A single-process movement lock.
-- A cross-command stop request.
+- A latest-request-wins handoff that stops an active extension movement.
+- A five-second handoff timeout before a new movement fails safely.
 - Target writes at a controlled interval.
 - Two stable target readings before completion.
 - Stall detection.

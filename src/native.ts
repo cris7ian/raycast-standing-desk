@@ -1,9 +1,10 @@
 import { environment } from "@raycast/api";
 import { spawn } from "node:child_process";
-import { access, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import path from "node:path";
 import { logDiagnostic } from "./diagnostics";
 import { DeskConfiguration, validateTarget } from "./model";
+import { beginMovementRequest } from "./movement-request";
 import {
   getConfiguration,
   getDeskIdentifier,
@@ -28,6 +29,7 @@ const movementLockPath = path.join(environment.supportPath, "movement.lock");
 
 async function commonArguments(
   configuration: DeskConfiguration,
+  movementRequestID?: string,
 ): Promise<string[]> {
   const identifier = await getDeskIdentifier();
   const args = [
@@ -47,6 +49,9 @@ async function commonArguments(
   if (identifier) {
     args.push("--identifier", identifier);
   }
+  if (movementRequestID) {
+    args.push("--movement-request-id", movementRequestID);
+  }
   return args;
 }
 
@@ -55,6 +60,7 @@ async function runNative(
   commandArguments: string[] = [],
   onEvent?: (event: NativeEvent) => void,
   configuration?: DeskConfiguration,
+  movementRequestID?: string,
 ): Promise<NativeEvent> {
   await access(helperPath).catch(async () => {
     const error = new Error(
@@ -69,7 +75,7 @@ async function runNative(
   const args = [
     command,
     ...commandArguments,
-    ...(await commonArguments(activeConfiguration)),
+    ...(await commonArguments(activeConfiguration, movementRequestID)),
   ];
   await logDiagnostic("info", "native.started", {
     command,
@@ -169,8 +175,14 @@ export async function moveDesk(
 ): Promise<NativeEvent> {
   const configuration = await getConfiguration();
   const target = validateTarget(targetHeight, configuration);
-  await clearStopRequest();
-  return runNative("move", [String(target)], onEvent, configuration);
+  const movementRequestID = await beginMovementRequest(stopRequestPath);
+  return runNative(
+    "move",
+    [String(target)],
+    onEvent,
+    configuration,
+    movementRequestID,
+  );
 }
 
 export async function nudgeDesk(
@@ -180,23 +192,25 @@ export async function nudgeDesk(
   const configuration = await getConfiguration();
   const delta =
     direction === "up" ? configuration.stepHeight : -configuration.stepHeight;
-  await clearStopRequest();
-  return runNative("nudge", [String(delta)], onEvent, configuration);
+  const movementRequestID = await beginMovementRequest(stopRequestPath);
+  return runNative(
+    "nudge",
+    [String(delta)],
+    onEvent,
+    configuration,
+    movementRequestID,
+  );
 }
 
-export async function requestStop(): Promise<void> {
-  await mkdir(environment.supportPath, { recursive: true });
-  await writeFile(stopRequestPath, "stop\n", "utf8");
+export async function requestStop(): Promise<string> {
+  return beginMovementRequest(stopRequestPath);
 }
 
 export async function stopDesk(
   onEvent?: (event: NativeEvent) => void,
+  stopRequestID?: string,
 ): Promise<NativeEvent> {
-  await requestStop();
+  const activeStopRequestID = stopRequestID ?? (await requestStop());
   await new Promise((resolve) => setTimeout(resolve, 700));
-  return runNative("stop", [], onEvent);
-}
-
-async function clearStopRequest(): Promise<void> {
-  await rm(stopRequestPath, { force: true });
+  return runNative("stop", [], onEvent, undefined, activeStopRequestID);
 }

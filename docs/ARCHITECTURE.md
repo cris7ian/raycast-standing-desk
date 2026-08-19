@@ -46,7 +46,7 @@ The Sit, Stand, Raise, Lower, Stop, Save Sit, and Save Stand entry points call s
 
 The bridge uses two support files:
 
-- `stop-request` lets another Raycast command cancel active movement.
+- `stop-request` stores the latest movement request identifier. A newer request cancels an older helper.
 - `movement.lock` prevents concurrent movement helpers.
 
 ### Bluetooth helper
@@ -58,14 +58,16 @@ The bridge uses two support files:
 ## Movement sequence
 
 1. TypeScript validates the requested target.
-2. The bridge removes a stale stop request.
-3. The helper obtains the movement lock.
-4. CoreBluetooth discovers and connects to the desk.
-5. The helper reads the current height.
-6. The helper wakes and stops the controller before movement.
-7. The helper writes the target every 400 milliseconds.
-8. Height notifications and explicit reads update progress.
-9. The helper stops after two readings within `0.25 cm`.
+2. The bridge publishes a unique movement request identifier.
+3. An active helper detects the new identifier and stops.
+4. The new helper waits up to five seconds for the movement lock.
+5. A superseded helper exits without connecting to the desk.
+6. CoreBluetooth discovers and connects to the desk.
+7. The helper reads the current height.
+8. The helper wakes and stops the controller before movement.
+9. The helper writes the target every 400 milliseconds.
+10. Height notifications and explicit reads update progress.
+11. The helper stops after two readings within `0.25 cm`.
 
 Movement also stops after cancellation, a stall, a Bluetooth error, or 45 seconds.
 

@@ -8,6 +8,7 @@ private let outputServiceUUID = CBUUID(string: "99FA0020-338A-1024-8A49-009C0215
 private let outputCharacteristicUUID = CBUUID(string: "99FA0021-338A-1024-8A49-009C0215F78A")
 private let inputServiceUUID = CBUUID(string: "99FA0030-338A-1024-8A49-009C0215F78A")
 private let inputCharacteristicUUID = CBUUID(string: "99FA0031-338A-1024-8A49-009C0215F78A")
+private let movementHandoffTimeout = 5.0
 
 private enum DeskOperation {
     case status
@@ -26,6 +27,7 @@ private struct Options {
     var maximumHeight = 127.0
     var cancelFile: String?
     var lockFile: String?
+    var movementRequestID: String?
     var connectionTimeout = 12.0
     var movementTimeout = 45.0
 }
@@ -124,6 +126,11 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
             options.cancelFile = value
         case "--lock-file":
             options.lockFile = value
+        case "--movement-request-id":
+            guard UUID(uuidString: value) != nil else {
+                throw ArgumentError.message("Invalid movement request identifier.")
+            }
+            options.movementRequestID = value.lowercased()
         case "--connection-timeout":
             guard let timeout = Double(value), timeout > 0 else {
                 throw ArgumentError.message("Invalid connection timeout.")
@@ -146,25 +153,73 @@ private func parseOptions(_ arguments: [String]) throws -> Options {
     return options
 }
 
+private enum MovementLockError: LocalizedError {
+    case superseded
+    case timedOut
+
+    var errorDescription: String? {
+        switch self {
+        case .superseded:
+            "This movement was replaced by a newer command."
+        case .timedOut:
+            "The active desk movement did not stop within \(Int(movementHandoffTimeout)) seconds."
+        }
+    }
+}
+
+private func movementRequestIsCurrent(at path: String, requestID: String) -> Bool {
+    guard let contents = try? String(contentsOfFile: path, encoding: .utf8) else { return false }
+    return contents.trimmingCharacters(in: .whitespacesAndNewlines) == requestID
+}
+
 private final class MovementLock {
     private var descriptor: Int32 = -1
 
-    init(path: String) throws {
+    init(path: String, waitTimeout: TimeInterval, requestIsCurrent: () -> Bool) throws {
         descriptor = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
         guard descriptor >= 0 else {
             throw ArgumentError.message("Could not create the movement lock.")
         }
-        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
-            close(descriptor)
-            descriptor = -1
-            throw ArgumentError.message("Another desk movement is active. Stop it before starting a new movement.")
+
+        let deadline = Date().addingTimeInterval(waitTimeout)
+        while flock(descriptor, LOCK_EX | LOCK_NB) != 0 {
+            let lockError = errno
+            guard lockError == EWOULDBLOCK || lockError == EAGAIN else {
+                closeDescriptor()
+                throw ArgumentError.message("Could not obtain the movement lock.")
+            }
+            guard requestIsCurrent() else {
+                closeDescriptor()
+                throw MovementLockError.superseded
+            }
+            guard waitTimeout > 0, Date() < deadline else {
+                closeDescriptor()
+                if waitTimeout > 0 {
+                    throw MovementLockError.timedOut
+                }
+                throw ArgumentError.message("Another desk movement is active. Stop it before starting a new movement.")
+            }
+            usleep(50_000)
+        }
+
+        guard requestIsCurrent() else {
+            flock(descriptor, LOCK_UN)
+            closeDescriptor()
+            throw MovementLockError.superseded
         }
     }
 
     deinit {
         if descriptor >= 0 {
             flock(descriptor, LOCK_UN)
+            closeDescriptor()
+        }
+    }
+
+    private func closeDescriptor() {
+        if descriptor >= 0 {
             close(descriptor)
+            descriptor = -1
         }
     }
 }
@@ -178,6 +233,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     private var inputCharacteristic: CBCharacteristic?
     private var connectionTimeoutWorkItem: DispatchWorkItem?
     private var movementTimer: Timer?
+    private var cancellationTimer: Timer?
     private var targetHeight: Double?
     private var targetRaw: UInt16?
     private var lastReading: Reading?
@@ -196,7 +252,24 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         switch options.operation {
         case .move, .nudge:
             if let lockFile = options.lockFile {
-                movementLock = try MovementLock(path: lockFile)
+                let requestIsCurrent = {
+                    guard let cancelFile = options.cancelFile,
+                          let requestID = options.movementRequestID
+                    else { return true }
+                    return movementRequestIsCurrent(at: cancelFile, requestID: requestID)
+                }
+                movementLock = try MovementLock(
+                    path: lockFile,
+                    waitTimeout: options.movementRequestID == nil ? 0 : movementHandoffTimeout,
+                    requestIsCurrent: requestIsCurrent
+                )
+            }
+        case .stop:
+            if let cancelFile = options.cancelFile,
+               let requestID = options.movementRequestID,
+               !movementRequestIsCurrent(at: cancelFile, requestID: requestID)
+            {
+                throw MovementLockError.superseded
             }
         default:
             break
@@ -211,6 +284,11 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         connectionTimeoutWorkItem = workItem
         DispatchQueue.main.asyncAfter(deadline: .now() + options.connectionTimeout, execute: workItem)
         central = CBCentralManager(delegate: self, queue: .main)
+        if shouldMonitorMovementRequest {
+            cancellationTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                self?.cancelIfReplaced()
+            }
+        }
         RunLoop.main.run()
     }
 
@@ -340,6 +418,10 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             peripheral.readValue(for: outputCharacteristic)
         case .stop:
             guard let controlCharacteristic else { return }
+            if movementWasReplaced() {
+                complete(outcome: "stopped", reading: lastReading)
+                return
+            }
             operationStarted = true
             connectionTimeoutWorkItem?.cancel()
             peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
@@ -407,6 +489,10 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     }
 
     private func beginMovement(to requestedHeight: Double, from reading: Reading) {
+        if movementWasReplaced() {
+            complete(outcome: "stopped", reading: reading)
+            return
+        }
         guard requestedHeight >= options.minimumHeight, requestedHeight <= options.maximumHeight else {
             fail("Target height must be between \(options.minimumHeight) and \(options.maximumHeight) cm.")
             return
@@ -440,7 +526,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
 
     private func sendTarget() {
         guard !finishing else { return }
-        if let cancelFile = options.cancelFile, FileManager.default.fileExists(atPath: cancelFile) {
+        if movementWasReplaced() {
             stopAndComplete(outcome: "stopped")
             return
         }
@@ -490,6 +576,8 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         guard !finishing else { return }
         movementTimer?.invalidate()
         movementTimer = nil
+        cancellationTimer?.invalidate()
+        cancellationTimer = nil
         finishing = true
         if let peripheral, let controlCharacteristic {
             peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
@@ -503,7 +591,11 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         guard !finishing || alreadyFinishing else { return }
         finishing = true
         movementTimer?.invalidate()
-        var payload: [String: Any] = ["event": "complete", "connected": true]
+        cancellationTimer?.invalidate()
+        var payload: [String: Any] = [
+            "event": "complete",
+            "connected": peripheral?.state == .connected,
+        ]
         if let outcome { payload["outcome"] = outcome }
         if let reading {
             payload["heightCm"] = rounded(reading.heightCm)
@@ -521,6 +613,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         guard !finishing else { return }
         finishing = true
         movementTimer?.invalidate()
+        cancellationTimer?.invalidate()
         if let peripheral, let controlCharacteristic, targetHeight != nil {
             peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
         }
@@ -552,6 +645,40 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
     }
 
+    private func movementWasReplaced() -> Bool {
+        guard let cancelFile = options.cancelFile else { return false }
+        if let requestID = options.movementRequestID {
+            return !movementRequestIsCurrent(at: cancelFile, requestID: requestID)
+        }
+        switch options.operation {
+        case .move, .nudge:
+            return FileManager.default.fileExists(atPath: cancelFile)
+        default:
+            return false
+        }
+    }
+
+    private var shouldMonitorMovementRequest: Bool {
+        guard options.cancelFile != nil else { return false }
+        switch options.operation {
+        case .move, .nudge:
+            return true
+        case .stop:
+            return options.movementRequestID != nil
+        default:
+            return false
+        }
+    }
+
+    private func cancelIfReplaced() {
+        guard !finishing, movementWasReplaced() else { return }
+        if targetHeight != nil {
+            stopAndComplete(outcome: "stopped")
+        } else {
+            complete(outcome: "stopped", reading: lastReading)
+        }
+    }
+
     private func rounded(_ value: Double) -> NSDecimalNumber {
         NSDecimalNumber(
             string: String(format: "%.2f", value),
@@ -579,6 +706,54 @@ private func runSelfTests() -> Bool {
     guard abs(reading.heightCm - 70) < 0.001 else { return false }
     guard abs(reading.speed - (-1)) < 0.001 else { return false }
     guard littleEndianData(4_800) == Data([0xc0, 0x12]) else { return false }
+
+    let testDirectory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("standing-desk-self-test-\(UUID().uuidString)")
+    do {
+        try FileManager.default.createDirectory(at: testDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: testDirectory) }
+
+        let requestFile = testDirectory.appendingPathComponent("movement-request")
+        try "current-request\n".write(to: requestFile, atomically: true, encoding: .utf8)
+        guard movementRequestIsCurrent(at: requestFile.path, requestID: "current-request") else { return false }
+        guard !movementRequestIsCurrent(at: requestFile.path, requestID: "older-request") else { return false }
+
+        let lockFile = testDirectory.appendingPathComponent("movement.lock")
+        var firstLock: MovementLock? = try MovementLock(
+            path: lockFile.path,
+            waitTimeout: 0,
+            requestIsCurrent: { true }
+        )
+        do {
+            _ = try MovementLock(
+                path: lockFile.path,
+                waitTimeout: 0.05,
+                requestIsCurrent: { true }
+            )
+            return false
+        } catch MovementLockError.timedOut {
+            // Expected while the first lock is held.
+        }
+        do {
+            _ = try MovementLock(
+                path: lockFile.path,
+                waitTimeout: 0.05,
+                requestIsCurrent: { false }
+            )
+            return false
+        } catch MovementLockError.superseded {
+            // Expected when a newer request exists.
+        }
+        withExtendedLifetime(firstLock) {}
+        firstLock = nil
+        _ = try MovementLock(
+            path: lockFile.path,
+            waitTimeout: 0,
+            requestIsCurrent: { true }
+        )
+    } catch {
+        return false
+    }
     return true
 }
 
@@ -597,6 +772,9 @@ do {
         let client = try DeskClient(options: options)
         client.start()
     }
+} catch MovementLockError.superseded {
+    emit(["event": "complete", "connected": false, "outcome": "stopped"])
+    Darwin.exit(0)
 } catch {
     emit(["event": "error", "message": error.localizedDescription])
     Darwin.exit(1)

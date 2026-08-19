@@ -104,9 +104,9 @@ export async function stopCommand() {
     style: Toast.Style.Animated,
     title: "Stopping desk",
   });
-  await requestStop();
+  const stopRequestID = await requestStop();
   try {
-    const result = await stopDesk();
+    const result = await stopDesk(undefined, stopRequestID);
     toast.style = Toast.Style.Success;
     toast.title = "Desk stopped";
     toast.message =

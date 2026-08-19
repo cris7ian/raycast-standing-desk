@@ -152,7 +152,7 @@ export default function Command() {
   }
 
   async function performStop() {
-    await requestStop();
+    const stopRequestID = await requestStop();
     const toast = await showToast({
       style: Toast.Style.Animated,
       title: "Stopping desk",
@@ -164,7 +164,7 @@ export default function Command() {
       return;
     }
     try {
-      const event = await stopDesk(acceptEvent);
+      const event = await stopDesk(acceptEvent, stopRequestID);
       acceptEvent(event);
       toast.style = Toast.Style.Success;
       toast.title = "Desk stopped";
