@@ -1,0 +1,603 @@
+import CoreBluetooth
+import Darwin
+import Foundation
+
+private let controlServiceUUID = CBUUID(string: "99FA0001-338A-1024-8A49-009C0215F78A")
+private let controlCharacteristicUUID = CBUUID(string: "99FA0002-338A-1024-8A49-009C0215F78A")
+private let outputServiceUUID = CBUUID(string: "99FA0020-338A-1024-8A49-009C0215F78A")
+private let outputCharacteristicUUID = CBUUID(string: "99FA0021-338A-1024-8A49-009C0215F78A")
+private let inputServiceUUID = CBUUID(string: "99FA0030-338A-1024-8A49-009C0215F78A")
+private let inputCharacteristicUUID = CBUUID(string: "99FA0031-338A-1024-8A49-009C0215F78A")
+
+private enum DeskOperation {
+    case status
+    case move(Double)
+    case nudge(Double)
+    case stop
+    case selfTest
+}
+
+private struct Options {
+    let operation: DeskOperation
+    var deskName = "Desk"
+    var identifier: UUID?
+    var baseHeight = 62.0
+    var minimumHeight = 62.0
+    var maximumHeight = 127.0
+    var cancelFile: String?
+    var lockFile: String?
+    var connectionTimeout = 12.0
+    var movementTimeout = 45.0
+}
+
+private enum ArgumentError: LocalizedError {
+    case message(String)
+
+    var errorDescription: String? {
+        switch self {
+        case let .message(message): message
+        }
+    }
+}
+
+private struct Reading {
+    let heightCm: Double
+    let speed: Double
+}
+
+private func rawTarget(for heightCm: Double, baseHeight: Double) -> UInt16? {
+    let raw = ((heightCm - baseHeight) * 100).rounded()
+    guard raw >= 0, raw <= Double(UInt16.max) else { return nil }
+    return UInt16(raw)
+}
+
+private func decodeReading(_ data: Data, baseHeight: Double) -> Reading? {
+    guard data.count >= 4 else { return nil }
+    let rawHeight = UInt16(data[0]) | UInt16(data[1]) << 8
+    let rawSpeedBits = UInt16(data[2]) | UInt16(data[3]) << 8
+    let rawSpeed = Int16(bitPattern: rawSpeedBits)
+    return Reading(
+        heightCm: baseHeight + Double(rawHeight) / 100,
+        speed: Double(rawSpeed) / 100
+    )
+}
+
+private func littleEndianData(_ value: UInt16) -> Data {
+    Data([UInt8(value & 0x00ff), UInt8((value & 0xff00) >> 8)])
+}
+
+private func parseOptions(_ arguments: [String]) throws -> Options {
+    guard let command = arguments.first else {
+        throw ArgumentError.message("Expected one of: status, move, nudge, stop, self-test.")
+    }
+
+    var index = 1
+    let operation: DeskOperation
+    switch command {
+    case "status":
+        operation = .status
+    case "move":
+        guard arguments.count > 1, let target = Double(arguments[1]) else {
+            throw ArgumentError.message("move requires a target height in centimeters.")
+        }
+        operation = .move(target)
+        index = 2
+    case "nudge":
+        guard arguments.count > 1, let delta = Double(arguments[1]), delta != 0 else {
+            throw ArgumentError.message("nudge requires a non-zero distance in centimeters.")
+        }
+        operation = .nudge(delta)
+        index = 2
+    case "stop":
+        operation = .stop
+    case "self-test":
+        return Options(operation: .selfTest)
+    default:
+        throw ArgumentError.message("Unknown command: \(command).")
+    }
+
+    var options = Options(operation: operation)
+    while index < arguments.count {
+        let option = arguments[index]
+        guard index + 1 < arguments.count else {
+            throw ArgumentError.message("Missing value for \(option).")
+        }
+        let value = arguments[index + 1]
+        switch option {
+        case "--name":
+            options.deskName = value
+        case "--identifier":
+            guard let identifier = UUID(uuidString: value) else {
+                throw ArgumentError.message("Invalid desk identifier: \(value).")
+            }
+            options.identifier = identifier
+        case "--base-height":
+            guard let height = Double(value) else { throw ArgumentError.message("Invalid base height.") }
+            options.baseHeight = height
+        case "--minimum-height":
+            guard let height = Double(value) else { throw ArgumentError.message("Invalid minimum height.") }
+            options.minimumHeight = height
+        case "--maximum-height":
+            guard let height = Double(value) else { throw ArgumentError.message("Invalid maximum height.") }
+            options.maximumHeight = height
+        case "--cancel-file":
+            options.cancelFile = value
+        case "--lock-file":
+            options.lockFile = value
+        case "--connection-timeout":
+            guard let timeout = Double(value), timeout > 0 else {
+                throw ArgumentError.message("Invalid connection timeout.")
+            }
+            options.connectionTimeout = timeout
+        case "--movement-timeout":
+            guard let timeout = Double(value), timeout > 0 else {
+                throw ArgumentError.message("Invalid movement timeout.")
+            }
+            options.movementTimeout = timeout
+        default:
+            throw ArgumentError.message("Unknown option: \(option).")
+        }
+        index += 2
+    }
+
+    guard options.minimumHeight < options.maximumHeight else {
+        throw ArgumentError.message("Minimum height must be lower than maximum height.")
+    }
+    return options
+}
+
+private final class MovementLock {
+    private var descriptor: Int32 = -1
+
+    init(path: String) throws {
+        descriptor = open(path, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+        guard descriptor >= 0 else {
+            throw ArgumentError.message("Could not create the movement lock.")
+        }
+        guard flock(descriptor, LOCK_EX | LOCK_NB) == 0 else {
+            close(descriptor)
+            descriptor = -1
+            throw ArgumentError.message("Another desk movement is active. Stop it before starting a new movement.")
+        }
+    }
+
+    deinit {
+        if descriptor >= 0 {
+            flock(descriptor, LOCK_UN)
+            close(descriptor)
+        }
+    }
+}
+
+private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheralDelegate {
+    private let options: Options
+    private var central: CBCentralManager!
+    private var peripheral: CBPeripheral?
+    private var controlCharacteristic: CBCharacteristic?
+    private var outputCharacteristic: CBCharacteristic?
+    private var inputCharacteristic: CBCharacteristic?
+    private var connectionTimeoutWorkItem: DispatchWorkItem?
+    private var movementTimer: Timer?
+    private var targetHeight: Double?
+    private var targetRaw: UInt16?
+    private var lastReading: Reading?
+    private var stableTargetReadings = 0
+    private var stationaryReadings = 0
+    private var movementStartedAt: Date?
+    private var operationStarted = false
+    private var finishing = false
+    private var movementLock: MovementLock?
+    private var signalSources: [DispatchSourceSignal] = []
+
+    init(options: Options) throws {
+        self.options = options
+        super.init()
+
+        switch options.operation {
+        case .move, .nudge:
+            if let lockFile = options.lockFile {
+                movementLock = try MovementLock(path: lockFile)
+            }
+        default:
+            break
+        }
+    }
+
+    func start() {
+        installSignalHandlers()
+        let workItem = DispatchWorkItem { [weak self] in
+            self?.fail("Timed out while connecting to the desk. Put it in pairing mode and quit other desk-control apps.")
+        }
+        connectionTimeoutWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + options.connectionTimeout, execute: workItem)
+        central = CBCentralManager(delegate: self, queue: .main)
+        RunLoop.main.run()
+    }
+
+    func centralManagerDidUpdateState(_ central: CBCentralManager) {
+        switch central.state {
+        case .poweredOn:
+            findDesk()
+        case .unauthorized:
+            fail("Bluetooth access is denied. Allow Standing Desk Bluetooth Helper in System Settings > Privacy & Security > Bluetooth.")
+        case .poweredOff:
+            fail("Bluetooth is turned off.")
+        case .unsupported:
+            fail("This Mac does not support Bluetooth Low Energy.")
+        case .resetting, .unknown:
+            break
+        @unknown default:
+            fail("Bluetooth entered an unsupported state.")
+        }
+    }
+
+    private func findDesk() {
+        if let identifier = options.identifier {
+            if let knownDesk = central.retrievePeripherals(withIdentifiers: [identifier]).first {
+                connect(knownDesk)
+                return
+            }
+        }
+
+        let connected = central.retrieveConnectedPeripherals(withServices: [controlServiceUUID])
+        if let connectedDesk = connected.first(where: matchesDesk) {
+            connect(connectedDesk)
+            return
+        }
+
+        central.scanForPeripherals(withServices: nil, options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+    }
+
+    private func matchesDesk(_ candidate: CBPeripheral) -> Bool {
+        if let identifier = options.identifier {
+            return candidate.identifier == identifier
+        }
+        guard let name = candidate.name else { return false }
+        return name.localizedCaseInsensitiveContains(options.deskName)
+    }
+
+    func centralManager(
+        _ central: CBCentralManager,
+        didDiscover peripheral: CBPeripheral,
+        advertisementData: [String: Any],
+        rssi RSSI: NSNumber
+    ) {
+        guard self.peripheral == nil, matchesDesk(peripheral) else { return }
+        connect(peripheral)
+    }
+
+    private func connect(_ desk: CBPeripheral) {
+        guard peripheral == nil else { return }
+        peripheral = desk
+        central.stopScan()
+        central.connect(desk, options: nil)
+    }
+
+    func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
+        peripheral.delegate = self
+        peripheral.discoverServices([controlServiceUUID, outputServiceUUID, inputServiceUUID])
+    }
+
+    func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
+        fail("Could not connect to \(peripheral.name ?? "the desk"): \(error?.localizedDescription ?? "unknown error").")
+    }
+
+    func centralManager(_ central: CBCentralManager, didDisconnectPeripheral peripheral: CBPeripheral, error: Error?) {
+        guard !finishing else { return }
+        fail("The desk disconnected\(error.map { ": \($0.localizedDescription)" } ?? ".")")
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverServices error: Error?) {
+        if let error {
+            fail("Could not discover desk services: \(error.localizedDescription).")
+            return
+        }
+        guard let services = peripheral.services else {
+            fail("The desk did not expose its Bluetooth services.")
+            return
+        }
+        for service in services {
+            switch service.uuid {
+            case controlServiceUUID:
+                peripheral.discoverCharacteristics([controlCharacteristicUUID], for: service)
+            case outputServiceUUID:
+                peripheral.discoverCharacteristics([outputCharacteristicUUID], for: service)
+            case inputServiceUUID:
+                peripheral.discoverCharacteristics([inputCharacteristicUUID], for: service)
+            default:
+                break
+            }
+        }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
+        if let error {
+            fail("Could not discover desk controls: \(error.localizedDescription).")
+            return
+        }
+        for characteristic in service.characteristics ?? [] {
+            switch characteristic.uuid {
+            case controlCharacteristicUUID:
+                controlCharacteristic = characteristic
+            case outputCharacteristicUUID:
+                outputCharacteristic = characteristic
+            case inputCharacteristicUUID:
+                inputCharacteristic = characteristic
+            default:
+                break
+            }
+        }
+        startOperationWhenReady()
+    }
+
+    private func startOperationWhenReady() {
+        guard !operationStarted, let peripheral else { return }
+        switch options.operation {
+        case .status:
+            guard let outputCharacteristic else { return }
+            operationStarted = true
+            connectionTimeoutWorkItem?.cancel()
+            peripheral.readValue(for: outputCharacteristic)
+        case .stop:
+            guard let controlCharacteristic else { return }
+            operationStarted = true
+            connectionTimeoutWorkItem?.cancel()
+            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+                self?.complete(outcome: "stopped", reading: self?.lastReading)
+            }
+        case .move, .nudge:
+            guard controlCharacteristic != nil, inputCharacteristic != nil, let outputCharacteristic else { return }
+            operationStarted = true
+            connectionTimeoutWorkItem?.cancel()
+            peripheral.setNotifyValue(true, for: outputCharacteristic)
+            peripheral.readValue(for: outputCharacteristic)
+        case .selfTest:
+            break
+        }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
+        if let error {
+            fail("Could not read desk height: \(error.localizedDescription).")
+            return
+        }
+        guard characteristic == outputCharacteristic,
+              let data = characteristic.value,
+              let reading = decodeReading(data, baseHeight: options.baseHeight)
+        else { return }
+
+        let previousReading = lastReading
+        lastReading = reading
+        emit([
+            "event": targetHeight == nil ? "status" : "progress",
+            "connected": true,
+            "deskName": peripheral.name ?? "Desk",
+            "identifier": peripheral.identifier.uuidString,
+            "heightCm": rounded(reading.heightCm),
+            "speed": rounded(reading.speed),
+        ])
+
+        switch options.operation {
+        case .status:
+            complete(outcome: nil, reading: reading)
+        case let .move(height):
+            if targetHeight == nil {
+                beginMovement(to: height, from: reading)
+            } else {
+                evaluateMovement(reading, previous: previousReading)
+            }
+        case let .nudge(delta):
+            if targetHeight == nil {
+                let proposed = reading.heightCm + delta
+                let clamped = min(max(proposed, options.minimumHeight), options.maximumHeight)
+                beginMovement(to: clamped, from: reading)
+            } else {
+                evaluateMovement(reading, previous: previousReading)
+            }
+        case .stop, .selfTest:
+            break
+        }
+    }
+
+    func peripheral(_ peripheral: CBPeripheral, didWriteValueFor characteristic: CBCharacteristic, error: Error?) {
+        if let error, !finishing {
+            fail("The desk rejected a movement command: \(error.localizedDescription).")
+        }
+    }
+
+    private func beginMovement(to requestedHeight: Double, from reading: Reading) {
+        guard requestedHeight >= options.minimumHeight, requestedHeight <= options.maximumHeight else {
+            fail("Target height must be between \(options.minimumHeight) and \(options.maximumHeight) cm.")
+            return
+        }
+        guard let targetRaw = rawTarget(for: requestedHeight, baseHeight: options.baseHeight) else {
+            fail("Target height cannot be represented by this desk controller.")
+            return
+        }
+        targetHeight = requestedHeight
+        self.targetRaw = targetRaw
+        movementStartedAt = Date()
+
+        if abs(reading.heightCm - requestedHeight) <= 0.25 {
+            complete(outcome: "reached", reading: reading)
+            return
+        }
+
+        guard let peripheral, let controlCharacteristic else {
+            fail("Desk movement controls are unavailable.")
+            return
+        }
+        peripheral.writeValue(Data([0xfe, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+        peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.sendTarget()
+            self?.movementTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+                self?.sendTarget()
+            }
+        }
+    }
+
+    private func sendTarget() {
+        guard !finishing else { return }
+        if let cancelFile = options.cancelFile, FileManager.default.fileExists(atPath: cancelFile) {
+            stopAndComplete(outcome: "stopped")
+            return
+        }
+        if let startedAt = movementStartedAt, Date().timeIntervalSince(startedAt) > options.movementTimeout {
+            fail("Desk movement exceeded \(Int(options.movementTimeout)) seconds and was stopped.")
+            return
+        }
+        guard let peripheral, let inputCharacteristic, let outputCharacteristic, let targetRaw else {
+            fail("Desk movement controls became unavailable.")
+            return
+        }
+        peripheral.writeValue(littleEndianData(targetRaw), for: inputCharacteristic, type: writeType(for: inputCharacteristic))
+        peripheral.readValue(for: outputCharacteristic)
+    }
+
+    private func evaluateMovement(_ reading: Reading, previous: Reading?) {
+        guard let targetHeight else { return }
+        if abs(reading.heightCm - targetHeight) <= 0.25 {
+            stableTargetReadings += 1
+        } else {
+            stableTargetReadings = 0
+        }
+        if stableTargetReadings >= 2 {
+            stopAndComplete(outcome: "reached")
+            return
+        }
+
+        if let previous,
+           abs(previous.heightCm - reading.heightCm) < 0.01,
+           abs(reading.speed) < 0.01,
+           movementStartedAt.map({ Date().timeIntervalSince($0) > 2 }) == true
+        {
+            stationaryReadings += 1
+        } else {
+            stationaryReadings = 0
+        }
+        if stationaryReadings >= 5 {
+            fail("The desk stopped before reaching \(rounded(targetHeight)) cm. Check for an obstruction.")
+        }
+    }
+
+    private func writeType(for characteristic: CBCharacteristic) -> CBCharacteristicWriteType {
+        characteristic.properties.contains(.write) ? .withResponse : .withoutResponse
+    }
+
+    private func stopAndComplete(outcome: String) {
+        guard !finishing else { return }
+        movementTimer?.invalidate()
+        movementTimer = nil
+        finishing = true
+        if let peripheral, let controlCharacteristic {
+            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.complete(outcome: outcome, reading: self?.lastReading, alreadyFinishing: true)
+        }
+    }
+
+    private func complete(outcome: String?, reading: Reading?, alreadyFinishing: Bool = false) {
+        guard !finishing || alreadyFinishing else { return }
+        finishing = true
+        movementTimer?.invalidate()
+        var payload: [String: Any] = ["event": "complete", "connected": true]
+        if let outcome { payload["outcome"] = outcome }
+        if let reading {
+            payload["heightCm"] = rounded(reading.heightCm)
+            payload["speed"] = rounded(reading.speed)
+        }
+        if let peripheral {
+            payload["deskName"] = peripheral.name ?? "Desk"
+            payload["identifier"] = peripheral.identifier.uuidString
+        }
+        emit(payload)
+        shutdown(code: 0)
+    }
+
+    private func fail(_ message: String) {
+        guard !finishing else { return }
+        finishing = true
+        movementTimer?.invalidate()
+        if let peripheral, let controlCharacteristic, targetHeight != nil {
+            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+        }
+        emit(["event": "error", "message": message])
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+            self?.shutdown(code: 1)
+        }
+    }
+
+    private func shutdown(code: Int32) {
+        connectionTimeoutWorkItem?.cancel()
+        if let peripheral, peripheral.state != .disconnected {
+            central.cancelPeripheralConnection(peripheral)
+        }
+        fflush(stdout)
+        fflush(stderr)
+        Darwin.exit(code)
+    }
+
+    private func installSignalHandlers() {
+        for signalNumber in [SIGINT, SIGTERM] {
+            signal(signalNumber, SIG_IGN)
+            let source = DispatchSource.makeSignalSource(signal: signalNumber, queue: .main)
+            source.setEventHandler { [weak self] in
+                self?.stopAndComplete(outcome: "stopped")
+            }
+            source.resume()
+            signalSources.append(source)
+        }
+    }
+
+    private func rounded(_ value: Double) -> NSDecimalNumber {
+        NSDecimalNumber(
+            string: String(format: "%.2f", value),
+            locale: Locale(identifier: "en_US_POSIX")
+        )
+    }
+}
+
+private func emit(_ payload: [String: Any]) {
+    guard JSONSerialization.isValidJSONObject(payload),
+          let data = try? JSONSerialization.data(withJSONObject: payload, options: [.sortedKeys]),
+          let line = String(data: data, encoding: .utf8)
+    else { return }
+    print(line)
+    fflush(stdout)
+}
+
+private func runSelfTests() -> Bool {
+    guard rawTarget(for: 70, baseHeight: 62) == 800 else { return false }
+    guard rawTarget(for: 110, baseHeight: 62) == 4_800 else { return false }
+    guard rawTarget(for: 61, baseHeight: 62) == nil else { return false }
+
+    let data = Data([0x20, 0x03, 0x9c, 0xff])
+    guard let reading = decodeReading(data, baseHeight: 62) else { return false }
+    guard abs(reading.heightCm - 70) < 0.001 else { return false }
+    guard abs(reading.speed - (-1)) < 0.001 else { return false }
+    guard littleEndianData(4_800) == Data([0xc0, 0x12]) else { return false }
+    return true
+}
+
+do {
+    let options = try parseOptions(Array(CommandLine.arguments.dropFirst()))
+    switch options.operation {
+    case .selfTest:
+        if runSelfTests() {
+            emit(["event": "complete", "message": "Native protocol self-tests passed."])
+            Darwin.exit(0)
+        } else {
+            emit(["event": "error", "message": "Native protocol self-tests failed."])
+            Darwin.exit(1)
+        }
+    default:
+        let client = try DeskClient(options: options)
+        client.start()
+    }
+} catch {
+    emit(["event": "error", "message": error.localizedDescription])
+    Darwin.exit(1)
+}
