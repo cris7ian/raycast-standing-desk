@@ -8,6 +8,10 @@ The menu opens immediately with the last reported height. Sit, Stand, Raise, and
 
 The extension is self-contained. It does not require Python, Bluetility, or a manually copied Bluetooth identifier.
 
+## Screencast
+
+![Standing Desk screencast](assets/standing-desk-screencast.gif)
+
 ## Commands
 
 | Command                          | Result                                               |
