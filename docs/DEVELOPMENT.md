@@ -110,6 +110,20 @@ Do not accept a major API update only because npm reports it as latest. Confirm 
 
 GitHub Actions runs the offline verification suite on macOS for pushes and pull requests. CI does not have a desk and must never attempt Bluetooth discovery.
 
+## GitHub release
+
+The `VERSION` file defines the release version. Create an annotated tag named `v` followed by that version. Pushing the tag starts the release workflow.
+
+The workflow verifies the extension, builds a production Raycast bundle, creates source and bundle ZIP files, calculates SHA-256 checksums, and publishes a GitHub Release.
+
+Build release assets locally with:
+
+```sh
+scripts/package-release.sh "$(tr -d '[:space:]' < VERSION)" release
+```
+
+The source archive is the supported local installation route. Extract it, run `npm ci && npm run dev`, and keep the source directory available to Raycast. The prebuilt bundle is a release artifact. It does not replace the Raycast local-extension workflow.
+
 ## Raycast Store release
 
 Treat every file in the working tree as publishable. Before publishing, inspect `git status --short`. Move unrelated untracked files outside the repository. Do not rely on `.gitignore` to exclude them from the Raycast publisher.

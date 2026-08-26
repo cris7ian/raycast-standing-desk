@@ -32,10 +32,14 @@ The management view also supports a custom target height, settings, diagnostics,
 
 ## Install
 
-1. Install **Standing Desk** from the Raycast Store.
-2. Approve Bluetooth access when macOS asks.
-3. Hold the desk Bluetooth button until its light flashes.
-4. Open **Manage Standing Desk**, then open **Desk Settings** and select the desk.
+1. Download `standing-desk-v1.0.0-source.zip` from the [latest GitHub release](https://github.com/cris7ian/raycast-standing-desk/releases/latest).
+2. Extract the archive and open Terminal in its `standing-desk-v1.0.0` directory.
+3. Run `npm ci && npm run dev`.
+4. Approve Bluetooth access when macOS asks.
+5. Hold the desk Bluetooth button until its light flashes.
+6. Open **Manage Standing Desk**, then open **Desk Settings** and select the desk.
+
+The source release requires macOS, Node.js, Xcode Command Line Tools, and Raycast. The release includes a prebuilt Raycast bundle and SHA-256 checksums. Raycast loads local extensions through `npm run dev`. The bundle is included for inspection and reproducible release verification.
 
 Contributors can find local setup and build requirements in [Development](docs/DEVELOPMENT.md).
 
