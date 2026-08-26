@@ -112,7 +112,7 @@ GitHub Actions runs the offline verification suite on macOS for pushes and pull 
 
 ## GitHub release
 
-The `VERSION` file defines the release version. Create an annotated tag named `v` followed by that version. Pushing the tag starts the release workflow.
+The `VERSION` file defines the release version. Before creating a release, update `VERSION` and `CHANGELOG.md`. Create an annotated tag named `v` followed by that version. Pushing the tag starts the release workflow.
 
 The workflow verifies the extension, builds a production Raycast bundle, creates source and bundle ZIP files, calculates SHA-256 checksums, and publishes a GitHub Release.
 
@@ -121,6 +121,8 @@ Build release assets locally with:
 ```sh
 scripts/package-release.sh "$(tr -d '[:space:]' < VERSION)" release
 ```
+
+Run local packaging from a clean worktree. The script rejects dirty worktrees and version mismatches so the source archive and bundle represent the same commit.
 
 The source archive is the supported local installation route. Extract it, run `npm ci && npm run dev`, and keep the source directory available to Raycast. The prebuilt bundle is a release artifact. It does not replace the Raycast local-extension workflow.
 

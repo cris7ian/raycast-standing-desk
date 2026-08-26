@@ -44,6 +44,11 @@ Run `git diff --check` before committing.
 
 Use `./assets/deskctl status ...` only for status-level live verification. State clearly when physical movement was not tested.
 
+## GitHub releases
+
+- `VERSION` is the release source of truth. Push the matching `v<VERSION>` tag to run `.github/workflows/release.yml`.
+- Package only a clean worktree. The source archive comes from `HEAD`, so this prevents source and bundle assets from diverging.
+
 ## Compatibility
 
 Keep `@raycast/api` compatible with the installed stable Raycast application. A major API update can target a different Raycast runtime.

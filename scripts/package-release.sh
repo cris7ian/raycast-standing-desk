@@ -9,6 +9,17 @@ if [[ ! "$release_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
   exit 1
 fi
 
+expected_version="$(tr -d '[:space:]' < VERSION)"
+if [[ "$release_version" != "$expected_version" ]]; then
+  echo "Release version must match VERSION: $expected_version" >&2
+  exit 1
+fi
+
+if [[ -n "$(git status --porcelain)" ]]; then
+  echo "Commit or stash changes before packaging a release." >&2
+  exit 1
+fi
+
 mkdir -p "$output_directory"
 
 bundle_directory="$output_directory/standing-desk-v${release_version}"
