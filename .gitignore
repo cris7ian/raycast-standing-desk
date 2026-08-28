@@ -7,3 +7,8 @@ release/
 DerivedData/
 ios/**/xcuserdata/
 *.xcuserstate
+
+# Keep local App Store release artifacts out of Raycast publishing and Git.
+app-store-release-prep/*
+!app-store-release-prep/web/
+!app-store-release-prep/web/**

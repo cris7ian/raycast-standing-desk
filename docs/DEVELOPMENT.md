@@ -178,4 +178,6 @@ Privacy and support pages use a private S3 bucket behind CloudFront at `standing
 scripts/publish-app-store-pages.sh
 ```
 
-The command uploads `app-store-release-prep/web/index.html`, `privacy.html`, and `support.html`. It invalidates the matching CloudFront distribution without deleting bucket objects.
+The static site source is `app-store-release-prep/web/`. The command uploads the complete directory to the private `standingdesk.salsaparapizza.com` bucket in `eu-west-1`, preserves unrelated bucket objects, and invalidates CloudFront distribution `E3C0WPKC4RFR6O`.
+
+The publisher applies no-cache headers to HTML, `robots.txt`, `sitemap.xml`, and `site.webmanifest`. It verifies the public HTTPS pages, required assets, manifest content type, and final headline after the invalidation completes.

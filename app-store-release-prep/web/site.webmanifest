@@ -1,0 +1,16 @@
+{
+  "name": "Standing Desk",
+  "short_name": "Standing Desk",
+  "description": "Use your desk like a Wizard.",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#fffaf0",
+  "theme_color": "#f7cf45",
+  "icons": [
+    {
+      "src": "/assets/app-icon.png",
+      "sizes": "1024x1024",
+      "type": "image/png"
+    }
+  ]
+}
