@@ -19,12 +19,16 @@ enum DeskConnectionState: Equatable {
     var label: String {
         switch self {
         case let .bluetoothUnavailable(message): message
-        case .disconnected: "Disconnected"
-        case .scanning: "Scanning"
-        case .connecting: "Connecting"
-        case .connected: "Connected"
-        case let .moving(target): "Moving to \(target.formatted(.number.precision(.fractionLength(1)))) cm"
-        case .stopping: "Stopping"
+        case .disconnected: appString("Disconnected")
+        case .scanning: appString("Scanning")
+        case .connecting: appString("Connecting")
+        case .connected: appString("Connected")
+        case let .moving(target):
+            appFormat(
+                "Moving to %@ cm",
+                target.formatted(.number.precision(.fractionLength(1)))
+            )
+        case .stopping: appString("Stopping")
         }
     }
 

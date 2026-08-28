@@ -113,7 +113,9 @@ struct SettingsView: View {
                 bluetooth.startScan()
             } label: {
                 Label(
-                    bluetooth.connectionState == .scanning ? "Scanning…" : "Scan for Desks",
+                    bluetooth.connectionState == .scanning
+                        ? appString("Scanning…")
+                        : appString("Scan for Desks"),
                     systemImage: "antenna.radiowaves.left.and.right"
                 )
             }
@@ -147,12 +149,12 @@ struct SettingsView: View {
 
     private var presetsSection: some View {
         Section("Presets") {
-            heightField("Sit", value: $sitHeight, icon: "sun.horizon")
-            currentHeightButton("Use Current Height for Sit") {
+            heightField(appString("Sit"), value: $sitHeight, icon: "sun.horizon")
+            currentHeightButton(appString("Use Current Height for Sit")) {
                 sitHeight = $0
             }
-            heightField("Stand", value: $standHeight, icon: "sun.max.fill")
-            currentHeightButton("Use Current Height for Stand") {
+            heightField(appString("Stand"), value: $standHeight, icon: "sun.max.fill")
+            currentHeightButton(appString("Use Current Height for Stand")) {
                 standHeight = $0
             }
         }
@@ -160,10 +162,10 @@ struct SettingsView: View {
 
     private var limitsSection: some View {
         Section {
-            heightField("Base", value: $configuration.baseHeight)
-            heightField("Minimum", value: $configuration.minimumHeight)
-            heightField("Maximum", value: $configuration.maximumHeight)
-            heightField("Raise and Lower Step", value: $configuration.stepHeight)
+            heightField(appString("Base"), value: $configuration.baseHeight)
+            heightField(appString("Minimum"), value: $configuration.minimumHeight)
+            heightField(appString("Maximum"), value: $configuration.maximumHeight)
+            heightField(appString("Raise and Lower Step"), value: $configuration.stepHeight)
         } header: {
             Text("Height Configuration")
         } footer: {
@@ -198,7 +200,7 @@ struct SettingsView: View {
             if let icon { Image(systemName: icon).foregroundStyle(.secondary) }
             Text(title)
             Spacer()
-            SelectAllNumberField(value: value, accessibilityLabel: "\(title) height")
+            SelectAllNumberField(value: value, accessibilityLabel: appFormat("%@ height", title))
                 .frame(width: 90)
             Text("cm").foregroundStyle(.secondary)
         }
@@ -224,7 +226,7 @@ struct SettingsView: View {
             handleSaveState(bluetooth.settingsMutationState)
         } catch {
             pendingMutation = nil
-            errorMessage = error.localizedDescription
+            errorMessage = localizedAppError(error)
         }
     }
 

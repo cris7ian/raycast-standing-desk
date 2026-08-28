@@ -1,8 +1,10 @@
 import SwiftUI
 
 struct ControllerView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var settingsStore: DeskSettingsStore
     @EnvironmentObject private var bluetooth: DeskBluetoothController
+    @EnvironmentObject private var shortcutHandler: AppShortcutHandler
     @State private var showingSafety = false
     @State private var pendingMovement: PendingMovement?
     @State private var pendingPresetSave: PresetSlot?
@@ -16,8 +18,8 @@ struct ControllerView: View {
 
         var label: String {
             switch self {
-            case .sit: "Sit"
-            case .stand: "Stand"
+            case .sit: appString("Sit")
+            case .stand: appString("Stand")
             }
         }
     }
@@ -78,6 +80,7 @@ struct ControllerView: View {
                 Text(bluetooth.alertMessage ?? "")
             }
             .onAppear {
+                if handlePendingShortcut() { return }
                 if settingsStore.hasSelectedDesk,
                    bluetooth.currentHeight == nil,
                    bluetooth.settingsMutationState != .pending,
@@ -94,6 +97,14 @@ struct ControllerView: View {
             }
             .onChange(of: bluetooth.settingsMutationState) { _, state in
                 handlePresetSave(state)
+            }
+            .onChange(of: shortcutHandler.pendingAction) {
+                handlePendingShortcut()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                if phase == .active {
+                    handlePendingShortcut()
+                }
             }
             .sensoryFeedback(.success, trigger: saveFeedback)
         }
@@ -124,7 +135,7 @@ struct ControllerView: View {
     private var positionsSection: some View {
         Section("Positions") {
             movementRow(
-                "Sit",
+                appString("Sit"),
                 icon: "sun.horizon",
                 detail: formatHeight(settingsStore.settings.sitHeight)
             ) {
@@ -132,7 +143,7 @@ struct ControllerView: View {
             }
 
             movementRow(
-                "Stand",
+                appString("Stand"),
                 icon: "sun.max",
                 detail: formatHeight(settingsStore.settings.standHeight)
             ) {
@@ -145,7 +156,7 @@ struct ControllerView: View {
     private var adjustmentSection: some View {
         Section("Adjust") {
             movementRow(
-                "Raise",
+                appString("Raise"),
                 icon: "arrow.up",
                 detail: formatHeight(settingsStore.settings.configuration.stepHeight)
             ) {
@@ -154,7 +165,7 @@ struct ControllerView: View {
             .disabled(!settingsStore.hasSelectedDesk || bluetooth.currentHeight == nil)
 
             movementRow(
-                "Lower",
+                appString("Lower"),
                 icon: "arrow.down",
                 detail: formatHeight(settingsStore.settings.configuration.stepHeight)
             ) {
@@ -194,7 +205,7 @@ struct ControllerView: View {
                 HStack(spacing: 12) {
                     Image(systemName: "mappin.and.ellipse")
                         .frame(width: 18)
-                    Text(savedPresetMessage ?? "Save Current Position")
+                    Text(savedPresetMessage ?? appString("Save Current Position"))
                     Spacer()
                     if pendingPresetSave != nil {
                         ProgressView()
@@ -214,7 +225,7 @@ struct ControllerView: View {
                     pendingPresetSave != nil
             )
 
-            actionRow("Refresh Height", icon: "arrow.clockwise") {
+            actionRow(appString("Refresh Height"), icon: "arrow.clockwise") {
                 bluetooth.refreshStatus()
             }
             .disabled(
@@ -282,6 +293,21 @@ struct ControllerView: View {
         }
     }
 
+    @discardableResult
+    private func handlePendingShortcut() -> Bool {
+        guard scenePhase == .active,
+              let action = shortcutHandler.consumePendingAction()
+        else {
+            return false
+        }
+        guard settingsStore.hasSelectedDesk else {
+            bluetooth.alertMessage = appString("Select a desk in Settings first.")
+            return true
+        }
+        requestMovement(action.movement)
+        return true
+    }
+
     private func cancelPendingMovement() {
         pendingMovement = nil
     }
@@ -321,7 +347,7 @@ struct ControllerView: View {
             handlePresetSave(bluetooth.settingsMutationState)
         } catch {
             pendingPresetSave = nil
-            bluetooth.alertMessage = error.localizedDescription
+            bluetooth.alertMessage = localizedAppError(error)
         }
     }
 
@@ -332,7 +358,7 @@ struct ControllerView: View {
             return
         case .succeeded:
             pendingPresetSave = nil
-            savedPresetMessage = "Saved as \(slot.label)"
+            savedPresetMessage = appFormat("Saved as %@", slot.label)
             saveFeedback += 1
             bluetooth.clearSettingsMutationState()
             let message = savedPresetMessage

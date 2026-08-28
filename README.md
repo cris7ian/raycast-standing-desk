@@ -4,7 +4,7 @@ Control an IKEA IDÅSEN standing desk from Raycast or iPhone through Bluetooth L
 
 The extension has a bunch of features like getting the current height, stores Sit and Stand positions, moves to a target height, and stops active movement. Use it from Raycast search or as a persistent menu-bar control. Sit defaults to `70 cm`. Stand defaults to `110 cm`. Yes, it moves the desk up and down.
 
-The iPhone app provides the same primary positions and adjustment controls in a compact native interface, with separate iPhone settings and desk selection.
+The iPhone app provides the same primary positions and adjustment controls in a compact native interface, with separate iPhone settings and desk selection. It supports English, Spanish, French, Italian, and German. After the first launch, press and hold its Home Screen icon for Sit and Stand quick actions.
 
 The extension is self-contained. It does not require Python, Bluetility, or a manually copied Bluetooth identifier.
 

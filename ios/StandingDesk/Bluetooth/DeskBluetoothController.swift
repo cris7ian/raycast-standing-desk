@@ -37,17 +37,17 @@ func deskCentralStateDisposition(for state: CBManagerState) -> DeskCentralStateD
 private func bluetoothUnavailableMessage(for state: CBManagerState) -> String {
     switch state {
     case .unauthorized:
-        "Bluetooth permission denied"
+        appString("Bluetooth permission denied")
     case .poweredOff:
-        "Bluetooth is off"
+        appString("Bluetooth is off")
     case .unsupported:
-        "Bluetooth Low Energy unavailable"
+        appString("Bluetooth Low Energy unavailable")
     case .resetting, .unknown:
-        "Bluetooth is unavailable"
+        appString("Bluetooth is unavailable")
     case .poweredOn:
-        "Bluetooth is available"
+        appString("Bluetooth is available")
     @unknown default:
-        "Bluetooth state is unsupported"
+        appString("Bluetooth state is unsupported")
     }
 }
 
@@ -198,13 +198,13 @@ final class DeskBluetoothController: NSObject, ObservableObject {
 
     func startScan() {
         guard !hasQueuedOrActiveMovement else {
-            alertMessage = "Wait for the desk to stop before scanning."
+            alertMessage = appString("Wait for the desk to stop before scanning.")
             return
         }
         if case .status = operation {
             invalidateActiveOperation()
         } else if operation != nil || pendingAfterStop != nil {
-            alertMessage = "Wait for the current desk request before scanning."
+            alertMessage = appString("Wait for the current desk request before scanning.")
             return
         }
         stopScan()
@@ -265,7 +265,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
 
     func move(to requestedTarget: Double) {
         guard settingsStore.hasAcknowledgedSafety else {
-            alertMessage = "Review and accept the safety checklist before moving the desk."
+            alertMessage = appString("Review and accept the safety checklist before moving the desk.")
             return
         }
         guard let snapshot = makeSnapshot() else { return }
@@ -273,13 +273,13 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             let target = try snapshot.configuration.validatedTarget(requestedTarget)
             requestMove(.move(id: UUID(), target: target, snapshot: snapshot))
         } catch {
-            alertMessage = error.localizedDescription
+            alertMessage = localizedAppError(error)
         }
     }
 
     func nudge(by delta: Double) {
         guard let currentHeight else {
-            alertMessage = "Refresh the desk height before using Raise or Lower."
+            alertMessage = appString("Refresh the desk height before using Raise or Lower.")
             return
         }
         let configuration = settingsStore.settings.configuration
@@ -289,7 +289,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             minimumHeight: configuration.minimumHeight,
             maximumHeight: configuration.maximumHeight
         ) else {
-            alertMessage = "The requested adjustment conflicts with the configured limits."
+            alertMessage = appString("The requested adjustment conflicts with the configured limits.")
             return
         }
         move(to: target)
@@ -299,7 +299,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         let snapshot = operation?.snapshot ?? pendingAfterStop?.snapshot ?? makeSnapshot()
         invalidateActiveOperation()
         pendingAfterStop = nil
-        cancelPendingMutation("Settings change was cancelled by Stop.")
+        cancelPendingMutation(appString("Settings change was cancelled by Stop."))
         if finalStopGeneration != nil {
             return
         }
@@ -315,7 +315,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         guard hasQueuedOrActiveMovement else { return }
         invalidateActiveOperation()
         pendingAfterStop = nil
-        cancelPendingMutation("Settings change was cancelled because the app became inactive.")
+        cancelPendingMutation(appString("Settings change was cancelled because the app became inactive."))
         if finalStopGeneration == nil {
             startFinalStop()
         }
@@ -325,7 +325,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         guard let deskID = settingsStore.settings.selectedDeskID,
               let selectionGeneration = settingsStore.settings.selectionGeneration
         else {
-            alertMessage = "Select a desk in Settings first."
+            alertMessage = appString("Select a desk in Settings first.")
             return nil
         }
         do {
@@ -335,7 +335,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                 configuration: try settingsStore.settings.configuration.validated()
             )
         } catch {
-            alertMessage = error.localizedDescription
+            alertMessage = localizedAppError(error)
             return nil
         }
     }
@@ -378,7 +378,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
     private func requestOperation(_ requestedOperation: Operation) {
         stopScan()
         let replacingMovement = operation?.isMovement == true || pendingAfterStop?.isMovement == true
-        cancelPendingMutation("Settings change was cancelled by a newer desk request.")
+        cancelPendingMutation(appString("Settings change was cancelled by a newer desk request."))
         invalidateActiveOperation()
         pendingAfterStop = nil
         let replacement = requestedOperation.replacingID(with: requestGeneration)
@@ -455,13 +455,13 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                 settingsMutationState = .failed(message)
                 alertMessage = message
             case nil:
-                let message = "The settings change could not be verified."
+                let message = appString("The settings change could not be verified.")
                 settingsMutationState = .failed(message)
                 alertMessage = message
             }
         } catch {
             settingsMutationState = .failed(error.localizedDescription)
-            alertMessage = error.localizedDescription
+            alertMessage = localizedAppError(error)
         }
     }
 
@@ -538,7 +538,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             }
         }
         guard let selected = central.retrievePeripherals(withIdentifiers: [expectedOperation.snapshot.deskID]).first else {
-            fail("The selected desk is unavailable. Scan for it again in Settings.")
+            fail(appString("The selected desk is unavailable. Scan for it again in Settings."))
             return
         }
         disconnectCurrentDesk()
@@ -559,7 +559,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             central.connect(selected, options: nil)
             scheduleConnectionTimeout(for: expectedOperation)
         @unknown default:
-            fail("The selected desk is in an unsupported connection state.")
+            fail(appString("The selected desk is in an unsupported connection state."))
         }
     }
 
@@ -602,7 +602,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                   self.operation?.id == operationID,
                   self.requestGeneration == operationID
             else { return }
-            let message = "Connection timed out. Put the desk in pairing mode and quit other desk-control apps."
+            let message = appString("Connection timed out. Put the desk in pairing mode and quit other desk-control apps.")
             if stopOperation {
                 self.failUnconfirmedStop(message)
             } else {
@@ -688,7 +688,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                   self.operation?.id == operationID,
                   self.requestGeneration == operationID
             else { return }
-            self.fail("Timed out while reading the desk height. No movement target was sent.")
+            self.fail(appString("Timed out while reading the desk height. No movement target was sent."))
         }
         initialReadingTimeout = timeout
         DispatchQueue.main.asyncAfter(deadline: .now() + 12, execute: timeout)
@@ -707,7 +707,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             return
         }
         guard rawTarget(for: target, baseHeight: snapshot.configuration.baseHeight) != nil else {
-            failMovement("Target height cannot be represented by this desk controller.")
+            failMovement(appString("Target height cannot be represented by this desk controller."))
             return
         }
 
@@ -727,7 +727,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                       self.operation?.id == id,
                       self.movementSetupScheduledFor != id
                 else { return }
-                self.failMovement("The desk did not acknowledge movement setup and was stopped.")
+                self.failMovement(appString("The desk did not acknowledge movement setup and was stopped."))
             }
             movementSetupTimeout = timeout
             DispatchQueue.main.asyncAfter(deadline: .now() + 3, execute: timeout)
@@ -765,11 +765,11 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         else { return }
 
         if Date().timeIntervalSince(startedAt) > DeskProtocol.movementTimeout {
-            failMovement("Desk movement exceeded 45 seconds and was stopped.")
+            failMovement(appString("Desk movement exceeded 45 seconds and was stopped."))
             return
         }
         guard let raw = rawTarget(for: target, baseHeight: snapshot.configuration.baseHeight) else {
-            failMovement("Target height cannot be represented by this desk controller.")
+            failMovement(appString("Target height cannot be represented by this desk controller."))
             return
         }
         let targetWriteType = writeType(for: inputCharacteristic)
@@ -799,7 +799,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             return
         }
         if Date().timeIntervalSince(startedAt) > DeskProtocol.movementTimeout {
-            failMovement("Desk movement exceeded 45 seconds and was stopped.")
+            failMovement(appString("Desk movement exceeded 45 seconds and was stopped."))
             return
         }
         guard var evaluator = movementEvaluator else { return }
@@ -818,7 +818,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             invalidateActiveOperation()
             startFinalStop()
         case .stalled:
-            failMovement("The desk stopped before reaching the target. Check for an obstruction.")
+            failMovement(appString("The desk stopped before reaching the target. Check for an obstruction."))
         }
     }
 
@@ -866,7 +866,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
             let finalStopIsPending = self?.controlWriteInFlight?.purpose == .finalStop(stopID) ||
                 self?.pendingControlWrites.contains(where: { $0.purpose == .finalStop(stopID) }) == true
             if finalStopIsPending {
-                self?.failFinalStop("The desk did not acknowledge the Stop command.")
+                self?.failFinalStop(appString("The desk did not acknowledge the Stop command."))
             } else {
                 self?.finishFinalStop()
             }
@@ -906,7 +906,10 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         endMovementBackgroundTask()
         disconnectCurrentDesk()
         connectionState = .disconnected
-        alertMessage = "\(message) Stop was not confirmed. Use the physical controller before continuing."
+        alertMessage = appFormat(
+            "%@ Stop was not confirmed. Use the physical controller before continuing.",
+            message
+        )
     }
 
     private func failUnconfirmedStop(_ message: String) {
@@ -920,7 +923,10 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         endMovementBackgroundTask()
         disconnectCurrentDesk()
         connectionState = .disconnected
-        alertMessage = "\(message) Stop was not confirmed. Use the physical controller before continuing."
+        alertMessage = appFormat(
+            "%@ Stop was not confirmed. Use the physical controller before continuing.",
+            message
+        )
     }
 
     private func writeControl(_ data: Data, purpose: ControlWrite) {
@@ -960,7 +966,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                 guard let self else { return }
                 self.invalidateActiveOperation()
                 self.pendingAfterStop = nil
-                self.cancelPendingMutation("Settings change failed because background time expired.")
+                self.cancelPendingMutation(appString("Settings change failed because background time expired."))
                 self.bestEffortStop()
                 self.finalStopTimeout?.cancel()
                 self.finalStopTimeout = nil
@@ -968,7 +974,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
                 self.pendingControlWrites = []
                 self.controlWriteInFlight = nil
                 self.connectionState = .disconnected
-                self.alertMessage = "Background time expired. Stop was not confirmed. Use the physical controller before continuing."
+                self.alertMessage = appString("Background time expired. Stop was not confirmed. Use the physical controller before continuing.")
                 self.endMovementBackgroundTask()
             }
         }
@@ -1004,7 +1010,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         }
         invalidateActiveOperation()
         pendingAfterStop = nil
-        cancelPendingMutation("Settings change failed because Bluetooth became unavailable.")
+        cancelPendingMutation(appString("Settings change failed because Bluetooth became unavailable."))
         finalStopTimeout?.cancel()
         finalStopTimeout = nil
         finalStopGeneration = nil
@@ -1014,14 +1020,17 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         disconnectCurrentDesk()
         connectionState = .bluetoothUnavailable(message)
         if movementWasPending {
-            alertMessage = "\(message). Stop could not be confirmed. Use the physical controller before continuing."
+            alertMessage = appFormat(
+                "%@. Stop could not be confirmed. Use the physical controller before continuing.",
+                message
+            )
         }
     }
 
     private func addDiscoveredDesk(_ peripheral: CBPeripheral, rssi: Int, connected: Bool, advertisedName: String? = nil) {
         let desk = DiscoveredDesk(
             id: peripheral.identifier,
-            name: advertisedName ?? peripheral.name ?? "Desk",
+            name: advertisedName ?? peripheral.name ?? appString("Desk"),
             rssi: rssi,
             isConnected: connected
         )
@@ -1064,19 +1073,19 @@ extension DeskBluetoothController: @preconcurrency CBCentralManagerDelegate {
             }
         case .unknown:
             if movementStartedAt != nil || finalStopGeneration != nil {
-                handleBluetoothUnavailable("Bluetooth is unavailable")
+                handleBluetoothUnavailable(appString("Bluetooth is unavailable"))
             } else if scanRequested {
                 connectionState = .scanning
             } else if operation != nil {
                 connectionState = .connecting
             } else {
-                connectionState = .bluetoothUnavailable("Bluetooth is unavailable")
+                connectionState = .bluetoothUnavailable(appString("Bluetooth is unavailable"))
             }
         case .unauthorized, .poweredOff, .unsupported, .resetting:
             scanRequested = false
             handleBluetoothUnavailable(bluetoothUnavailableMessage(for: central.state))
         @unknown default:
-            handleBluetoothUnavailable("Bluetooth state is unsupported")
+            handleBluetoothUnavailable(appString("Bluetooth state is unsupported"))
         }
     }
 
@@ -1122,7 +1131,10 @@ extension DeskBluetoothController: @preconcurrency CBCentralManagerDelegate {
             if scanRequested { connectionState = .scanning }
             return
         }
-        let message = "Could not connect to the desk: \(error?.localizedDescription ?? "unknown error")."
+        let message = appFormat(
+            "Could not connect to the desk: %@.",
+            error?.localizedDescription ?? appString("unknown error")
+        )
         if operation?.kind == .stop {
             failUnconfirmedStop(message)
         } else {
@@ -1134,18 +1146,18 @@ extension DeskBluetoothController: @preconcurrency CBCentralManagerDelegate {
         guard disconnectedPeripheral === peripheral else { return }
         clearConnectionResources()
         if finalStopGeneration != nil {
-            failFinalStop("The desk disconnected before it acknowledged Stop.")
+            failFinalStop(appString("The desk disconnected before it acknowledged Stop."))
         } else if let operation {
             switch operation.kind {
             case .move:
-                failUnconfirmedStop("The desk disconnected during movement.")
+                failUnconfirmedStop(appString("The desk disconnected during movement."))
             case .stop:
-                failUnconfirmedStop("The desk disconnected before Stop could be sent.")
+                failUnconfirmedStop(appString("The desk disconnected before Stop could be sent."))
             case .status:
-                fail("The desk disconnected while reading its height.")
+                fail(appString("The desk disconnected while reading its height."))
             }
         } else if pendingAfterStop?.isMovement == true {
-            failUnconfirmedStop("The desk disconnected before the next movement request could start safely.")
+            failUnconfirmedStop(appString("The desk disconnected before the next movement request could start safely."))
         } else if scanRequested {
             connectionState = .scanning
         } else {
@@ -1158,7 +1170,7 @@ extension DeskBluetoothController: @preconcurrency CBPeripheralDelegate {
     func peripheral(_ callbackPeripheral: CBPeripheral, didDiscoverServices error: Error?) {
         guard callbackIsCurrent(callbackPeripheral) else { return }
         if let error {
-            fail("Could not discover desk services: \(error.localizedDescription).")
+            fail(appFormat("Could not discover desk services: %@.", error.localizedDescription))
             return
         }
         for service in callbackPeripheral.services ?? [] {
@@ -1178,7 +1190,7 @@ extension DeskBluetoothController: @preconcurrency CBPeripheralDelegate {
     func peripheral(_ callbackPeripheral: CBPeripheral, didDiscoverCharacteristicsFor service: CBService, error: Error?) {
         guard callbackIsCurrent(callbackPeripheral) else { return }
         if let error {
-            fail("Could not discover desk controls: \(error.localizedDescription).")
+            fail(appFormat("Could not discover desk controls: %@.", error.localizedDescription))
             return
         }
         for characteristic in service.characteristics ?? [] {
@@ -1199,7 +1211,7 @@ extension DeskBluetoothController: @preconcurrency CBPeripheralDelegate {
     func peripheral(_ callbackPeripheral: CBPeripheral, didUpdateValueFor characteristic: CBCharacteristic, error: Error?) {
         guard callbackIsCurrent(callbackPeripheral), characteristic == outputCharacteristic else { return }
         if let error {
-            fail("Could not read desk height: \(error.localizedDescription).")
+            fail(appFormat("Could not read desk height: %@.", error.localizedDescription))
             return
         }
         guard let operation,
@@ -1234,7 +1246,7 @@ extension DeskBluetoothController: @preconcurrency CBPeripheralDelegate {
                operation?.id == writeGeneration,
                let error
             {
-                failMovement("The desk rejected the target height: \(error.localizedDescription).")
+                failMovement(appFormat("The desk rejected the target height: %@.", error.localizedDescription))
             }
             return
         }
@@ -1247,7 +1259,7 @@ extension DeskBluetoothController: @preconcurrency CBPeripheralDelegate {
         switch write {
         case let .setup(id):
             if id == requestGeneration, operation?.id == id, let error {
-                failMovement("The desk rejected a movement command: \(error.localizedDescription).")
+                failMovement(appFormat("The desk rejected a movement command: %@.", error.localizedDescription))
             } else if id == requestGeneration,
                       operation?.id == id,
                       !pendingControlWrites.contains(where: { $0.purpose == .setup(id) })
@@ -1259,7 +1271,7 @@ extension DeskBluetoothController: @preconcurrency CBPeripheralDelegate {
         case let .finalStop(id):
             if id == finalStopGeneration {
                 if let error {
-                    failFinalStop("The desk rejected the Stop command: \(error.localizedDescription).")
+                    failFinalStop(appFormat("The desk rejected the Stop command: %@.", error.localizedDescription))
                 } else {
                     finishFinalStop()
                 }
