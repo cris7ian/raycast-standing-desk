@@ -78,6 +78,10 @@ The macOS helper and iOS target compile the same file. Platform adapters remain 
 
 The system launch screen uses the shared black desk symbol centered on a fixed white background. The main toolbar loads the same vector asset.
 
+The app localizes its interface, safety text, errors, Bluetooth privacy description, and quick actions in Spanish, French, Italian, and German.
+
+`AppShortcuts.swift` registers localized Sit and Stand Home Screen quick actions. The scene delegate queues cold-launch and connected-scene actions. `ControllerView` consumes them only while the scene is active, then uses the normal safety acknowledgement and movement path.
+
 `DeskBluetoothController` serializes discovery, status, movement, settings mutations, and Stop operations on the main actor. It retrieves only the explicitly selected iPhone-local CoreBluetooth identifier for status and movement.
 
 The latest request replaces older queued work. If an older movement might have sent a target, the replacement waits behind a confirmed Stop. Control writes with responses run one at a time. For those characteristics, target writes start only after both setup writes succeed; otherwise they start after the bounded setup delay. Explicit Stop discards queued movement and settings work.
@@ -126,7 +130,7 @@ No layer assumes that a software stop always succeeds.
 
 ## iOS lifecycle boundary
 
-The iPhone app does not declare the CoreBluetooth background mode. Movement is foreground-only.
+The iPhone app does not declare the CoreBluetooth background mode. Movement is foreground-only, including movement requested from a Home Screen quick action.
 
 The app disables screen auto-lock during movement. When the scene becomes inactive, it invalidates the active request, cancels target writes, and sends Stop. When the scene becomes active, it refreshes the remembered desk height.
 

@@ -41,6 +41,7 @@ The Raycast extension and iPhone app implement these independent safeguards wher
 - A confirmed iPhone Stop before connected settings or desk mutations.
 - Serialized iPhone control writes and acknowledged movement setup when the characteristic supports responses.
 - Foreground-only movement on iPhone.
+- Foreground-only handling for iPhone Home Screen movement quick actions.
 - Immediate request invalidation and Stop when the iPhone app becomes inactive.
 - Screen auto-lock prevention while iPhone movement is active.
 
@@ -55,6 +56,7 @@ These safeguards reduce risk. They do not replace operator attention or the desk
 - Add focused tests before changing height encoding or completion thresholds.
 - Report whether verification was offline, status-only, or physical.
 - Do not enable iOS CoreBluetooth background mode or unattended movement.
+- Route iPhone movement quick actions through the same acknowledgement, bounds, serialization, and lifecycle Stop safeguards.
 - Do not assume the Raycast and iPhone controllers share a movement lock.
 - Keep Settings unavailable while iPhone movement is queued or active.
 - Preserve final-Stop priority over queued iPhone control writes and requests.

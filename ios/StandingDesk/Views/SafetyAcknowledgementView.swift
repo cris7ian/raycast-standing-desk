@@ -35,7 +35,7 @@ struct SafetyAcknowledgementView: View {
         }
     }
 
-    private func checklist(_ text: String) -> some View {
+    private func checklist(_ text: LocalizedStringKey) -> some View {
         Label(text, systemImage: "checkmark.circle")
     }
 }

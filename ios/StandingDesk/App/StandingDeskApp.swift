@@ -2,9 +2,11 @@ import SwiftUI
 
 @main
 struct StandingDeskApp: App {
+    @UIApplicationDelegateAdaptor(StandingDeskAppDelegate.self) private var appDelegate
     @Environment(\.scenePhase) private var scenePhase
     @StateObject private var settingsStore: DeskSettingsStore
     @StateObject private var bluetooth: DeskBluetoothController
+    @StateObject private var shortcutHandler = AppShortcutHandler.shared
 
     init() {
         let settingsStore = DeskSettingsStore()
@@ -17,10 +19,12 @@ struct StandingDeskApp: App {
             ControllerView()
                 .environmentObject(settingsStore)
                 .environmentObject(bluetooth)
+                .environmentObject(shortcutHandler)
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
-                if settingsStore.hasSelectedDesk,
+                if shortcutHandler.pendingAction == nil,
+                   settingsStore.hasSelectedDesk,
                    bluetooth.connectionState != .scanning,
                    bluetooth.settingsMutationState != .pending,
                    !bluetooth.isRefreshingStatus,
