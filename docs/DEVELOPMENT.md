@@ -181,3 +181,7 @@ scripts/publish-app-store-pages.sh
 The static site source is `app-store-release-prep/web/`. The command uploads the complete directory to the private `standingdesk.salsaparapizza.com` bucket in `eu-west-1`, preserves unrelated bucket objects, and invalidates CloudFront distribution `E3C0WPKC4RFR6O`.
 
 The publisher applies no-cache headers to HTML, `robots.txt`, `sitemap.xml`, and `site.webmanifest`. It verifies the public HTTPS pages, required assets, manifest content type, and final headline after the invalidation completes.
+
+Pushes to `main` automatically publish changes to the site source, publisher, or deployment workflow. `.github/workflows/deploy-app-store-site.yml` uses GitHub OpenID Connect to assume the least-privilege `github-standingdesk-site-deploy` AWS role. It does not use stored AWS access keys.
+
+Use **Deploy App Store Site → Run workflow** in GitHub Actions to republish the current `main` branch without a source change.

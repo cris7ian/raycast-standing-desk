@@ -4,8 +4,14 @@ set -euo pipefail
 
 site_domain="standingdesk.salsaparapizza.com"
 site_bucket="$site_domain"
-site_profile="${AWS_PROFILE:-personal}"
 site_source_dir="${1:-app-store-release-prep/web}"
+site_aws_args=()
+
+if [[ -n "${AWS_PROFILE:-}" ]]; then
+  site_aws_args=(--profile "$AWS_PROFILE")
+elif [[ "${CI:-}" != "true" ]]; then
+  site_aws_args=(--profile personal)
+fi
 
 required_files=(
   index.html
@@ -28,12 +34,16 @@ for site_file in "${required_files[@]}"; do
   fi
 done
 
-distribution_id="$({
-  aws cloudfront list-distributions \
-    --profile "$site_profile" \
-    --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '$site_domain')].Id | [0]" \
-    --output text
-} 2>/dev/null)"
+distribution_id="${CLOUDFRONT_DISTRIBUTION_ID:-}"
+
+if [[ -z "$distribution_id" ]]; then
+  distribution_id="$({
+    aws cloudfront list-distributions \
+      "${site_aws_args[@]}" \
+      --query "DistributionList.Items[?Aliases.Items && contains(Aliases.Items, '$site_domain')].Id | [0]" \
+      --output text
+  } 2>/dev/null)"
+fi
 
 if [[ -z "$distribution_id" || "$distribution_id" == "None" ]]; then
   echo "No CloudFront distribution found for $site_domain" >&2
@@ -41,7 +51,7 @@ if [[ -z "$distribution_id" || "$distribution_id" == "None" ]]; then
 fi
 
 aws s3 sync "$site_source_dir/" "s3://$site_bucket/" \
-  --profile "$site_profile" \
+  "${site_aws_args[@]}" \
   --exclude "*.html" \
   --exclude "robots.txt" \
   --exclude "sitemap.xml" \
@@ -51,26 +61,26 @@ aws s3 sync "$site_source_dir/" "s3://$site_bucket/" \
 
 for site_page in index.html privacy.html support.html; do
   aws s3 cp "$site_source_dir/$site_page" "s3://$site_bucket/$site_page" \
-    --profile "$site_profile" \
+    "${site_aws_args[@]}" \
     --content-type "text/html; charset=utf-8" \
     --cache-control "no-cache,max-age=0,must-revalidate" \
     --only-show-errors
 done
 
 aws s3 cp "$site_source_dir/robots.txt" "s3://$site_bucket/robots.txt" \
-  --profile "$site_profile" \
+  "${site_aws_args[@]}" \
   --content-type "text/plain; charset=utf-8" \
   --cache-control "no-cache,max-age=0,must-revalidate" \
   --only-show-errors
 
 aws s3 cp "$site_source_dir/sitemap.xml" "s3://$site_bucket/sitemap.xml" \
-  --profile "$site_profile" \
+  "${site_aws_args[@]}" \
   --content-type "application/xml; charset=utf-8" \
   --cache-control "no-cache,max-age=0,must-revalidate" \
   --only-show-errors
 
 aws s3 cp "$site_source_dir/site.webmanifest" "s3://$site_bucket/site.webmanifest" \
-  --profile "$site_profile" \
+  "${site_aws_args[@]}" \
   --content-type "application/manifest+json" \
   --cache-control "no-cache,max-age=0,must-revalidate" \
   --only-show-errors
@@ -79,7 +89,7 @@ invalidation_id="$({
   aws cloudfront create-invalidation \
     --distribution-id "$distribution_id" \
     --paths "/*" \
-    --profile "$site_profile" \
+    "${site_aws_args[@]}" \
     --query "Invalidation.Id" \
     --output text
 })"
@@ -87,7 +97,7 @@ invalidation_id="$({
 aws cloudfront wait invalidation-completed \
   --distribution-id "$distribution_id" \
   --id "$invalidation_id" \
-  --profile "$site_profile"
+  "${site_aws_args[@]}"
 
 for site_path in \
   "" \
