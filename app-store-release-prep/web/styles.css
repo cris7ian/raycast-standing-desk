@@ -40,10 +40,16 @@ nav a { text-decoration: none; }
   background: var(--yellow);
   border-top: 2px solid var(--ink);
   border-bottom: 2px solid var(--ink);
+  overflow: hidden;
+}
+
+.hero-inner {
+  width: min(1600px, 100%);
+  min-height: calc(100vh - 84px);
+  margin: 0 auto;
   display: grid;
   grid-template-columns: minmax(0, 1.02fr) minmax(380px, .98fr);
   align-items: center;
-  overflow: hidden;
 }
 
 .hero-copy { max-width: 690px; padding: 80px clamp(32px, 7vw, 110px); }
@@ -51,6 +57,7 @@ nav a { text-decoration: none; }
 h1 { margin: 0; font-size: clamp(58px, 7.2vw, 112px); line-height: .91; letter-spacing: -.065em; font-weight: 950; }
 h1 em { color: var(--teal); font-style: normal; position: relative; white-space: nowrap; }
 h1 em::after { content: ""; position: absolute; left: 2%; right: -2%; bottom: -7px; height: 7px; background: var(--coral); border-radius: 999px; transform: rotate(-2deg); }
+.wizard-wave span { display: inline-block; }
 .hero-lede { max-width: 590px; margin: 32px 0 0; font-size: clamp(21px, 2.1vw, 30px); line-height: 1.26; font-weight: 650; letter-spacing: -.02em; }
 .hero-actions { margin-top: 34px; display: flex; align-items: center; gap: 24px; flex-wrap: wrap; }
 .button { display: inline-flex; justify-content: center; align-items: center; min-height: 52px; padding: 0 23px; border-radius: 13px; font-weight: 850; text-decoration: none; }
@@ -123,12 +130,10 @@ h2 { margin: 0; font-size: clamp(45px, 6vw, 82px); line-height: .98; letter-spac
 .plain-list strong { color: var(--yellow); }
 .plain-list span { color: rgba(255,255,255,.75); }
 
-.settings-section { min-height: 900px; display: grid; grid-template-columns: .9fr 1.1fr; background: var(--teal); color: white; overflow: hidden; }
-.settings-copy { align-self: center; max-width: 630px; padding: 100px clamp(32px, 7vw, 110px); }
+.settings-section { min-height: 780px; display: grid; align-items: center; background: var(--teal); color: white; }
+.settings-copy { width: min(1180px, 100%); margin: 0 auto; padding: 110px 32px; }
 .settings-copy h2 { color: var(--yellow); }
-.settings-copy > p:not(.section-kicker) { margin: 30px 0 36px; font-size: 21px; line-height: 1.45; font-weight: 620; }
-.settings-art { position: relative; display: grid; place-items: end center; padding: 100px 40px 0; background: var(--coral); border-left: 2px solid var(--ink); }
-.phone-settings { width: min(340px, 66vw); transform: translateY(90px) rotate(2deg); animation: none; }
+.settings-copy > p:not(.section-kicker) { max-width: 700px; margin: 30px 0 36px; font-size: 21px; line-height: 1.45; font-weight: 620; }
 .principles { display: grid; grid-template-columns: 1fr 1fr; }
 .principle { min-height: 700px; padding: 90px clamp(32px, 6vw, 90px); display: flex; flex-direction: column; border-bottom: 2px solid var(--ink); }
 .principle + .principle { border-left: 2px solid var(--ink); }
@@ -182,16 +187,15 @@ footer > p { grid-column: 1 / -1; margin: 0; font-size: 14px; }
 @media (max-width: 840px) {
   .site-header { padding: 14px 18px; }
   nav > a:not(.nav-pill) { display: none; }
-  .hero { grid-template-columns: 1fr; }
+  .hero-inner { grid-template-columns: 1fr; }
   .hero-copy { padding: 64px 24px 38px; }
   .hero-art { min-height: 580px; padding: 30px 24px 0; }
   .hero-art::before { width: min(480px, 85vw); }
   .statement { padding: 80px 20px; }
   .product-showcase { padding: 80px 24px; grid-template-columns: 1fr; }
   .showcase-phone { order: 2; margin-top: 25px; }
-  .settings-section { grid-template-columns: 1fr; }
-  .settings-copy { padding: 80px 24px 50px; }
-  .settings-art { display: none; }
+  .settings-section { min-height: 620px; }
+  .settings-copy { padding: 80px 24px; }
   .principles { grid-template-columns: 1fr; }
   .principle { min-height: 590px; padding: 70px 24px; }
   .principle + .principle { border-left: 0; }
@@ -205,5 +209,13 @@ footer > p { grid-column: 1 / -1; margin: 0; font-size: 14px; }
 
 @media (prefers-reduced-motion: no-preference) {
   .phone { animation: float 5s ease-in-out infinite; }
+  .wizard-wave span { animation: wizard-wave 2.1s ease-in-out infinite; }
+  .wizard-wave span:nth-child(2) { animation-delay: .1s; }
+  .wizard-wave span:nth-child(3) { animation-delay: .2s; }
+  .wizard-wave span:nth-child(4) { animation-delay: .3s; }
+  .wizard-wave span:nth-child(5) { animation-delay: .4s; }
+  .wizard-wave span:nth-child(6) { animation-delay: .5s; }
+  .wizard-wave span:nth-child(7) { animation-delay: .6s; }
   @keyframes float { 0%, 100% { transform: rotate(3deg) translateY(28px); } 50% { transform: rotate(1.5deg) translateY(15px); } }
+  @keyframes wizard-wave { 0%, 35%, 100% { transform: translateY(0); } 15% { transform: translateY(-.13em); } }
 }
