@@ -34,7 +34,7 @@ The management view also supports a custom target height, settings, diagnostics,
 
 ## Install
 
-1. Download the `standing-desk-v<version>-source.zip` asset from the [latest GitHub release](https://github.com/cris7ian/raycast-standing-desk/releases/latest).
+1. Download the `standing-desk-v<version>-source.zip` asset from the [latest GitHub release](https://github.com/cris7ian/standing-desk/releases/latest).
 2. Extract the archive and open Terminal in its `standing-desk-v<version>` directory.
 3. Run `npm ci && npm run dev`.
 4. Approve Bluetooth access when macOS asks.
