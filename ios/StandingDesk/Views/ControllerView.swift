@@ -29,7 +29,9 @@ struct ControllerView: View {
             VStack(spacing: 0) {
                 Image("DeskSymbol")
                     .resizable()
+                    .renderingMode(.template)
                     .scaledToFit()
+                    .foregroundStyle(.primary)
                     .frame(width: 32, height: 24)
                     .padding(.top, 2)
                     .padding(.bottom, 12)
