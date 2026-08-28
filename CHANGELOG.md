@@ -6,6 +6,9 @@
 - Serialize iPhone Bluetooth requests, setup acknowledgements, and Stop handoffs.
 - Harden iPhone restoration, Bluetooth startup, reconnect handling, settings mutations, and strict-concurrency verification.
 - Add the black desk symbol and creator credit to the iPhone main screen.
+- Add a white, symbol-only iPhone launch screen that reuses the main toolbar asset.
+- Select complete height values on focus and dismiss the numeric keyboard when tapping outside a field.
+- Keep the iPhone target compatible with the Xcode 16.4 compiler used by GitHub Actions.
 - Repair remembered-desk startup, disconnected-peripheral cleanup, and unavailable-Bluetooth scan handling.
 - Serialize settings edits, preserve migration state, and keep rounded targets inside configured limits.
 

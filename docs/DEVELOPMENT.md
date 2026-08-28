@@ -61,6 +61,8 @@ scripts/verify-ios.sh
 
 The script builds for a generic iPhone simulator with complete Swift concurrency checks. It then runs tests on the first available iPhone simulator.
 
+GitHub Actions runs the same script on `macos-15`. Keep the iPhone source compatible with the runner's stable Xcode toolchain.
+
 ### Run on a personal iPhone
 
 1. Open `ios/StandingDesk.xcodeproj` in Xcode.

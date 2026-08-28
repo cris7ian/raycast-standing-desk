@@ -196,15 +196,6 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         central = CBCentralManager(delegate: self, queue: .main)
     }
 
-    isolated deinit {
-        movementTimer?.invalidate()
-        connectionTimeout?.cancel()
-        initialReadingTimeout?.cancel()
-        scanTimeout?.cancel()
-        finalStopTimeout?.cancel()
-        movementSetupTimeout?.cancel()
-    }
-
     func startScan() {
         guard !hasQueuedOrActiveMovement else {
             alertMessage = "Wait for the desk to stop before scanning."

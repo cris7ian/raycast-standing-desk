@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 struct SettingsView: View {
     @EnvironmentObject private var settingsStore: DeskSettingsStore
@@ -41,6 +42,8 @@ struct SettingsView: View {
             resetSection
             safetySection
         }
+        .background(KeyboardDismissInstaller())
+        .scrollDismissesKeyboard(.interactively)
         .disabled(mutationInFlight)
         .navigationTitle("Settings")
         .navigationBarTitleDisplayMode(.inline)
@@ -195,11 +198,8 @@ struct SettingsView: View {
             if let icon { Image(systemName: icon).foregroundStyle(.secondary) }
             Text(title)
             Spacer()
-            TextField("cm", value: value, format: .number.precision(.fractionLength(1)))
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
+            SelectAllNumberField(value: value, accessibilityLabel: "\(title) height")
                 .frame(width: 90)
-                .accessibilityLabel("\(title) height")
             Text("cm").foregroundStyle(.secondary)
         }
     }
@@ -212,6 +212,12 @@ struct SettingsView: View {
     }
 
     private func saveConfiguration() {
+        UIApplication.shared.sendAction(
+            #selector(UIResponder.resignFirstResponder),
+            to: nil,
+            from: nil,
+            for: nil
+        )
         guard beginTrackedMutation(.configuration) else { return }
         do {
             try bluetooth.applyConfiguration(configuration, sitHeight: sitHeight, standHeight: standHeight)
@@ -278,5 +284,129 @@ struct SettingsView: View {
         configuration = settingsStore.settings.configuration
         sitHeight = settingsStore.settings.sitHeight
         standHeight = settingsStore.settings.standHeight
+    }
+}
+
+private struct SelectAllNumberField: UIViewRepresentable {
+    @Binding var value: Double
+    let accessibilityLabel: String
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(value: $value)
+    }
+
+    func makeUIView(context: Context) -> UITextField {
+        let textField = UITextField()
+        textField.adjustsFontForContentSizeCategory = true
+        textField.delegate = context.coordinator
+        textField.font = .preferredFont(forTextStyle: .body)
+        textField.keyboardType = .decimalPad
+        textField.textAlignment = .right
+        textField.accessibilityLabel = accessibilityLabel
+        textField.addTarget(
+            context.coordinator,
+            action: #selector(Coordinator.textChanged(_:)),
+            for: .editingChanged
+        )
+        return textField
+    }
+
+    func updateUIView(_ textField: UITextField, context: Context) {
+        context.coordinator.value = $value
+        textField.accessibilityLabel = accessibilityLabel
+        guard !textField.isFirstResponder else { return }
+        context.coordinator.renderValue(in: textField)
+    }
+
+    @MainActor
+    final class Coordinator: NSObject, UITextFieldDelegate {
+        var value: Binding<Double>
+        private let formatter: NumberFormatter
+
+        init(value: Binding<Double>) {
+            self.value = value
+            formatter = NumberFormatter()
+            formatter.locale = .current
+            formatter.numberStyle = .decimal
+            formatter.minimumFractionDigits = 1
+            formatter.maximumFractionDigits = 1
+        }
+
+        @objc func textChanged(_ textField: UITextField) {
+            guard let number = formatter.number(from: textField.text ?? "") else { return }
+            value.wrappedValue = number.doubleValue
+        }
+
+        func textFieldDidBeginEditing(_ textField: UITextField) {
+            Task { @MainActor [weak textField] in
+                await Task.yield()
+                guard textField?.isFirstResponder == true else { return }
+                textField?.selectAll(nil)
+            }
+        }
+
+        func textFieldDidEndEditing(_ textField: UITextField) {
+            textChanged(textField)
+            renderValue(in: textField)
+        }
+
+        func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+            textField.resignFirstResponder()
+            return true
+        }
+
+        func renderValue(in textField: UITextField) {
+            textField.text = formatter.string(from: NSNumber(value: value.wrappedValue))
+        }
+    }
+}
+
+private struct KeyboardDismissInstaller: UIViewRepresentable {
+    func makeUIView(context: Context) -> KeyboardDismissView {
+        KeyboardDismissView()
+    }
+
+    func updateUIView(_ view: KeyboardDismissView, context: Context) {}
+}
+
+@MainActor
+private final class KeyboardDismissView: UIView, UIGestureRecognizerDelegate {
+    private weak var installedWindow: UIWindow?
+    private lazy var recognizer: UITapGestureRecognizer = {
+        let recognizer = UITapGestureRecognizer(target: self, action: #selector(dismissKeyboard))
+        recognizer.cancelsTouchesInView = false
+        recognizer.delegate = self
+        return recognizer
+    }()
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard installedWindow !== window else { return }
+        installedWindow?.removeGestureRecognizer(recognizer)
+        installedWindow = window
+        window?.addGestureRecognizer(recognizer)
+    }
+
+    override func willMove(toWindow newWindow: UIWindow?) {
+        if newWindow == nil {
+            installedWindow?.removeGestureRecognizer(recognizer)
+            installedWindow = nil
+        }
+        super.willMove(toWindow: newWindow)
+    }
+
+    @objc private func dismissKeyboard() {
+        installedWindow?.endEditing(true)
+    }
+
+    func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer, shouldReceive touch: UITouch) -> Bool {
+        var touchedView = touch.view
+        while let view = touchedView {
+            if view is UITextField || view is UITextView {
+                return false
+            }
+            touchedView = view.superview
+        }
+        return true
     }
 }

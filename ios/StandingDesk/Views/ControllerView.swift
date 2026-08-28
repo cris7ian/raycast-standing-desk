@@ -24,17 +24,28 @@ struct ControllerView: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                brandingSection
-                statusSection
-                positionsSection
-                adjustmentSection
-                utilitySection
-                footerSection
+            VStack(spacing: 0) {
+                Image("DeskSymbol")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 32, height: 24)
+                    .padding(.top, 2)
+                    .padding(.bottom, 12)
+                    .accessibilityHidden(true)
+
+                List {
+                    statusSection
+                    positionsSection
+                    adjustmentSection
+                    utilitySection
+                    footerSection
+                }
+                .listStyle(.insetGrouped)
+                .listSectionSpacing(.compact)
+                .contentMargins(.top, 0, for: .scrollContent)
+                .environment(\.defaultMinListRowHeight, 46)
             }
-            .listStyle(.insetGrouped)
-            .listSectionSpacing(.compact)
-            .environment(\.defaultMinListRowHeight, 46)
+            .background(Color(uiColor: .systemGroupedBackground).ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -88,18 +99,6 @@ struct ControllerView: View {
         }
     }
 
-    private var brandingSection: some View {
-        Section {
-            DeskLogo()
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 6)
-                .accessibilityHidden(true)
-                .listRowInsets(EdgeInsets())
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
-        }
-    }
-
     private var statusSection: some View {
         Section {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
@@ -126,7 +125,7 @@ struct ControllerView: View {
         Section("Positions") {
             movementRow(
                 "Sit",
-                icon: "sunrise",
+                icon: "sun.horizon",
                 detail: formatHeight(settingsStore.settings.sitHeight)
             ) {
                 requestMovement(.sit)
@@ -183,7 +182,7 @@ struct ControllerView: View {
                 Button {
                     saveCurrentPosition(as: .sit)
                 } label: {
-                    Label("Save as Sit", systemImage: "sunrise")
+                    Label("Save as Sit", systemImage: "sun.horizon")
                 }
 
                 Button {
@@ -229,8 +228,8 @@ struct ControllerView: View {
     private var footerSection: some View {
         Section {
             Text("built by Cristian E. Caroli 🍕")
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
+                .font(.footnote)
+                .foregroundStyle(.secondary)
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
@@ -367,24 +366,5 @@ struct ControllerView: View {
 
     private func formatHeight(_ height: Double) -> String {
         "\(height.formatted(.number.precision(.fractionLength(1)))) cm"
-    }
-}
-
-private struct DeskLogo: View {
-    var body: some View {
-        ZStack(alignment: .top) {
-            Capsule()
-                .frame(width: 76, height: 14)
-
-            HStack(alignment: .top, spacing: 28) {
-                Capsule()
-                    .frame(width: 12, height: 50)
-                Capsule()
-                    .frame(width: 12, height: 40)
-            }
-            .padding(.top, 7)
-        }
-        .foregroundStyle(.black)
-        .frame(width: 76, height: 57, alignment: .top)
     }
 }

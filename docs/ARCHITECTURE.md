@@ -76,6 +76,8 @@ The macOS helper and iOS target compile the same file. Platform adapters remain 
 
 `ios/StandingDesk.xcodeproj` builds the iOS 17 application and its unit tests.
 
+The system launch screen uses the shared black desk symbol centered on a fixed white background. The main toolbar loads the same vector asset.
+
 `DeskBluetoothController` serializes discovery, status, movement, settings mutations, and Stop operations on the main actor. It retrieves only the explicitly selected iPhone-local CoreBluetooth identifier for status and movement.
 
 The latest request replaces older queued work. If an older movement might have sent a target, the replacement waits behind a confirmed Stop. Control writes with responses run one at a time. For those characteristics, target writes start only after both setup writes succeed; otherwise they start after the bounded setup delay. Explicit Stop discards queued movement and settings work.
