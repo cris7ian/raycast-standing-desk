@@ -2,7 +2,9 @@
 
 ## Overview
 
-The extension separates Raycast user interface code from physical Bluetooth control. A signed Swift helper owns all CoreBluetooth operations.
+The repository contains a Raycast extension and a native iPhone app. Both use shared Swift protocol and movement-policy code.
+
+The Raycast extension delegates CoreBluetooth operations to a signed Swift helper. The iPhone app owns its CoreBluetooth session in-process.
 
 ```mermaid
 flowchart LR
@@ -16,6 +18,11 @@ flowchart LR
     UI --> StopFile[Stop request file]
     Helper --> StopFile
     Helper --> Lock[Movement lock file]
+    PhoneUser[iPhone user] --> IOS[SwiftUI app]
+    IOS --> IOSBLE[iOS CoreBluetooth controller]
+    IOSBLE --> CoreBluetooth
+    Shared[StandingDeskCore.swift] --> Helper
+    Shared --> IOSBLE
 ```
 
 ## Components
@@ -59,7 +66,25 @@ The `discover` operation runs for five seconds. It reports the remembered periph
 
 `scripts/build-native.sh` compiles `arm64` and `x86_64` executables in `.raycast-swift-build`. It combines them with `lipo`, embeds `native/Info.plist`, and applies an ad-hoc signature.
 
-## Movement sequence
+### Shared Swift core
+
+`native/StandingDeskCore.swift` defines protocol UUIDs, payloads, height conversions, configuration validation, nudge bounds, and movement evaluation.
+
+The macOS helper and iOS target compile the same file. Platform adapters remain responsible for process or application lifecycle.
+
+### iPhone app
+
+`ios/StandingDesk.xcodeproj` builds the iOS 17 application and its unit tests.
+
+`DeskBluetoothController` serializes discovery, status, movement, settings mutations, and Stop operations on the main actor. It retrieves only the explicitly selected iPhone-local CoreBluetooth identifier for status and movement.
+
+The latest request replaces older queued work. If an older movement might have sent a target, the replacement waits behind a confirmed Stop. Control writes with responses run one at a time. For those characteristics, target writes start only after both setup writes succeed; otherwise they start after the bounded setup delay. Explicit Stop discards queued movement and settings work.
+
+The app stores configuration, presets, selection generation, and the first-use safety acknowledgement in `UserDefaults`. It also stores the acknowledgement under an independent key, so malformed settings data cannot present the checklist again. Tolerant decoding preserves valid fields when the stored schema changes or one field is malformed. It persists normalized migrations immediately, and re-selecting the same desk keeps its generation stable.
+
+The safety acknowledgement persists for the app data lifetime. Desk selection and configuration changes do not present the checklist again.
+
+## Raycast movement sequence
 
 1. The bridge publishes a unique movement request identifier before it awaits desk-bound state.
 2. The bridge loads validated configuration and snapshots the explicit desk selection.
@@ -77,6 +102,17 @@ The `discover` operation runs for five seconds. It reports the remembered periph
 
 Movement also stops after cancellation, a stall, a Bluetooth error, or 45 seconds.
 
+## iPhone movement sequence
+
+1. The controller snapshots the selected desk, selection generation, and validated configuration.
+2. It replaces stale queued work with a new request generation.
+3. A replacement waits for confirmed Stop when an older movement could have sent a target.
+4. CoreBluetooth connects only to the snapshotted desk identifier.
+5. The controller reads height before it sends a movement target.
+6. It serializes Wake and Stop setup writes and waits for acknowledgements when the characteristic supports responses.
+7. It writes the target every 400 milliseconds and evaluates height updates.
+8. It prioritizes a final Stop after success, replacement, failure, lifecycle exit, stall, or timeout.
+
 ## Failure boundaries
 
 - Raycast owns user feedback. The extension owns settings and saved positions.
@@ -85,3 +121,13 @@ Movement also stops after cancellation, a stall, a Bluetooth error, or 45 second
 - The physical controller remains the final stop mechanism.
 
 No layer assumes that a software stop always succeeds.
+
+## iOS lifecycle boundary
+
+The iPhone app does not declare the CoreBluetooth background mode. Movement is foreground-only.
+
+The app disables screen auto-lock during movement. When the scene becomes inactive, it invalidates the active request, cancels target writes, and sends Stop. When the scene becomes active, it refreshes the remembered desk height.
+
+A short UIKit background task protects final Stop delivery. Its expiration handler performs immediate best-effort cleanup and tells the user when Stop was not confirmed.
+
+Latest-request-wins coordination is local to each application. The Raycast lock and iOS request generation cannot coordinate across devices. Do not control movement from macOS and iPhone simultaneously.

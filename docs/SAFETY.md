@@ -22,11 +22,12 @@ During movement:
 
 ## Software safeguards
 
-The extension implements these independent safeguards:
+The Raycast extension and iPhone app implement these independent safeguards where applicable:
 
 - Configurable minimum and maximum target heights.
 - A first-use safety acknowledgement.
-- A safety acknowledgement scoped to the selected physical desk.
+- A desk-scoped Raycast safety acknowledgement.
+- A persisted iPhone safety acknowledgement shown once per app data lifetime.
 - Explicit desk selection before every status or movement command.
 - A single-process movement lock.
 - A latest-request-wins handoff that stops an active extension movement.
@@ -36,7 +37,12 @@ The extension implements these independent safeguards:
 - Stall detection.
 - A 45-second movement timeout.
 - A final stop command after success, cancellation, or failure.
-- Stop requests before and after desk or calibration changes.
+- Raycast Stop requests before and after desk or calibration changes.
+- A confirmed iPhone Stop before connected settings or desk mutations.
+- Serialized iPhone control writes and acknowledged movement setup when the characteristic supports responses.
+- Foreground-only movement on iPhone.
+- Immediate request invalidation and Stop when the iPhone app becomes inactive.
+- Screen auto-lock prevention while iPhone movement is active.
 
 These safeguards reduce risk. They do not replace operator attention or the desk controller's hardware protections.
 
@@ -48,6 +54,10 @@ These safeguards reduce risk. They do not replace operator attention or the desk
 - Treat timeout, bounds, locking, and stall logic as safety-critical code.
 - Add focused tests before changing height encoding or completion thresholds.
 - Report whether verification was offline, status-only, or physical.
+- Do not enable iOS CoreBluetooth background mode or unattended movement.
+- Do not assume the Raycast and iPhone controllers share a movement lock.
+- Keep Settings unavailable while iPhone movement is queued or active.
+- Preserve final-Stop priority over queued iPhone control writes and requests.
 
 ## Recovery
 

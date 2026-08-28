@@ -50,7 +50,9 @@ CoreBluetooth does not provide a complete list of paired Bluetooth devices. A di
 
 The fallback name match is case-insensitive. Its default value is `Desk`.
 
-Saving settings stores the selected desk's macOS CoreBluetooth UUID. Future status and movement commands require that explicit selection and retrieve only that peripheral. The name filter is discovery-only. This UUID is local to macOS and is not the desk MAC address.
+Saving settings stores the selected desk's CoreBluetooth UUID for that Apple device. Future status and movement commands require that explicit selection and retrieve only that peripheral. The name filter is discovery-only.
+
+The UUID is not the desk MAC address. macOS and iPhone can assign different identifiers, so select the desk separately in Raycast and the iPhone app.
 
 ## Protocol changes
 

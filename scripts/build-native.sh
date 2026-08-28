@@ -2,6 +2,7 @@
 set -euo pipefail
 
 project_root="$(cd "$(dirname "$0")/.." && pwd)"
+core_source_file="$project_root/native/StandingDeskCore.swift"
 source_file="$project_root/native/DeskBLE.swift"
 info_plist="$project_root/native/Info.plist"
 output_file="$project_root/assets/deskctl"
@@ -23,6 +24,7 @@ build_architecture() {
     -Xlinker __TEXT \
     -Xlinker __info_plist \
     -Xlinker "$info_plist" \
+    "$core_source_file" \
     "$source_file" \
     -o "$architecture_output"
 }

@@ -6,6 +6,7 @@
 - Node.js 22.22.2 or later.
 - npm 7 or later.
 - Xcode Command Line Tools.
+- Xcode with an iOS 17 or later simulator runtime for iPhone development.
 - Raycast stable.
 
 ## Setup
@@ -19,18 +20,22 @@ npm run dev
 
 ## Source map
 
-| Path                      | Responsibility                                      |
-| ------------------------- | --------------------------------------------------- |
-| `src/manage-desk.tsx`     | Full Raycast interface and action coordination.     |
-| `src/desk-menu.tsx`       | Persistent menu-bar status and common actions.      |
-| `src/settings-form.tsx`   | Settings validation and default restoration.        |
-| `src/quick-command.ts`    | Shared direct-command behavior.                     |
-| `src/native.ts`           | Native process execution and JSON event parsing.    |
-| `src/storage.ts`          | Settings, presets, selected desk, and safety state. |
-| `src/model.ts`            | Pure configuration and height validation.           |
-| `src/diagnostics.ts`      | Bounded and redacted diagnostic logging.            |
-| `native/DeskBLE.swift`    | CoreBluetooth state machine and movement safety.    |
-| `scripts/build-native.sh` | Universal helper build and signing.                 |
+| Path                            | Responsibility                                       |
+| ------------------------------- | ---------------------------------------------------- |
+| `src/manage-desk.tsx`           | Full Raycast interface and action coordination.      |
+| `src/desk-menu.tsx`             | Persistent menu-bar status and common actions.       |
+| `src/settings-form.tsx`         | Settings validation and default restoration.         |
+| `src/quick-command.ts`          | Shared direct-command behavior.                      |
+| `src/native.ts`                 | Native process execution and JSON event parsing.     |
+| `src/storage.ts`                | Settings, presets, selected desk, and safety state.  |
+| `src/model.ts`                  | Pure configuration and height validation.            |
+| `src/diagnostics.ts`            | Bounded and redacted diagnostic logging.             |
+| `native/DeskBLE.swift`          | CoreBluetooth state machine and movement safety.     |
+| `native/StandingDeskCore.swift` | Shared protocol, validation, and movement policy.    |
+| `ios/StandingDesk/`             | SwiftUI views, persistence, and iOS Bluetooth owner. |
+| `ios/StandingDeskTests/`        | Disconnected iOS unit tests.                         |
+| `scripts/verify-ios.sh`         | iOS simulator build and unit-test verification.      |
+| `scripts/build-native.sh`       | Universal helper build and signing.                  |
 
 Native architecture intermediates are written to `.raycast-swift-build`, which the Raycast publisher excludes from Store submissions.
 
@@ -47,6 +52,23 @@ git diff --check
 ```
 
 `npm test` runs Vitest, builds the native helper, and runs native protocol self-tests.
+
+Verify the iPhone app separately:
+
+```sh
+scripts/verify-ios.sh
+```
+
+The script builds for a generic iPhone simulator with complete Swift concurrency checks. It then runs tests on the first available iPhone simulator.
+
+### Run on a personal iPhone
+
+1. Open `ios/StandingDesk.xcodeproj` in Xcode.
+2. Select your Personal Team for the **Standing Desk** target.
+3. Connect and select your iPhone.
+4. Run the application.
+
+Xcode can write the selected development team into the project. Review signing changes before committing; another developer must select their own team.
 
 ## Safe live testing
 
@@ -108,7 +130,7 @@ Do not accept a major API update only because npm reports it as latest. Confirm 
 
 ## Continuous integration
 
-GitHub Actions runs the offline verification suite on macOS for pushes and pull requests. CI does not have a desk and must never attempt Bluetooth discovery.
+GitHub Actions runs the Raycast and iPhone offline verification suites for pushes and pull requests. CI does not have a desk and must never attempt Bluetooth discovery.
 
 ## GitHub release
 

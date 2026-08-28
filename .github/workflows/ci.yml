@@ -38,3 +38,14 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  ios:
+    runs-on: macos-15
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Build and test iPhone app
+        run: scripts/verify-ios.sh

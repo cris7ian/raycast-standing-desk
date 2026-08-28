@@ -4,3 +4,6 @@ node_modules/
 .raycast-swift-build/
 raycast-env.d.ts
 release/
+DerivedData/
+ios/**/xcuserdata/
+*.xcuserstate

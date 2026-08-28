@@ -41,7 +41,21 @@ Open **Manage Standing Desk**, then open **Desk Settings**. Check these constrai
 - Sit and Stand heights must remain inside the configured range.
 - Raise and Lower Step must be greater than `0 cm` and at most `20 cm`.
 
-Use **Restore Default Settings** when the saved values are not usable. This restores the `62–127 cm` range, `70 cm` Sit position, `110 cm` Stand position, and `1 cm` step. Select the desk and review the safety notice again.
+Use **Restore Default Settings** when the saved values are not usable. This restores the `62–127 cm` range, `70 cm` Sit position, `110 cm` Stand position, and `1 cm` step. Raycast preserves the selected desk and safety acknowledgement.
+
+## The iPhone app forgets its desk
+
+The app stores its selected CoreBluetooth identifier in `UserDefaults`. Normal launches and settings changes preserve it.
+
+Reinstalling the app, clearing its data, or changing its bundle identifier creates new storage. Scan and select the desk again after one of those changes. Fresh app storage also presents the safety checklist once.
+
+If the stored desk becomes unavailable after a Bluetooth reset, put the desk in pairing mode and scan again. Re-selecting a desk does not reset the existing safety acknowledgement.
+
+## Xcode cannot create an iPhone provisioning profile
+
+Confirm that Xcode is signed in to an Apple Account and that **Signing & Capabilities** uses that account's Personal Team.
+
+Free Personal Teams have server-side App ID, device, and profile limits. Local profile deletion does not reset those limits. See [Apple's developer account documentation](https://developer.apple.com/help/account/basics/about-your-developer-account) or contact Apple Developer Support when the reported device state is stale.
 
 ## Inspect diagnostic logs
 

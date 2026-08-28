@@ -2,12 +2,6 @@ import CoreBluetooth
 import Darwin
 import Foundation
 
-private let controlServiceUUID = CBUUID(string: "99FA0001-338A-1024-8A49-009C0215F78A")
-private let controlCharacteristicUUID = CBUUID(string: "99FA0002-338A-1024-8A49-009C0215F78A")
-private let outputServiceUUID = CBUUID(string: "99FA0020-338A-1024-8A49-009C0215F78A")
-private let outputCharacteristicUUID = CBUUID(string: "99FA0021-338A-1024-8A49-009C0215F78A")
-private let inputServiceUUID = CBUUID(string: "99FA0030-338A-1024-8A49-009C0215F78A")
-private let inputCharacteristicUUID = CBUUID(string: "99FA0031-338A-1024-8A49-009C0215F78A")
 private let movementHandoffTimeout = 5.0
 
 private enum DeskOperation {
@@ -36,7 +30,7 @@ private struct Options {
     var movementRequestID: String?
     var connectionTimeout = 12.0
     var discoveryTimeout = 5.0
-    var movementTimeout = 45.0
+    var movementTimeout = DeskProtocol.movementTimeout
 }
 
 private enum ArgumentError: LocalizedError {
@@ -49,63 +43,9 @@ private enum ArgumentError: LocalizedError {
     }
 }
 
-private struct Reading {
-    let heightCm: Double
-    let speed: Double
-}
-
 private struct DiscoveredPeripheralState {
     let connected: Bool
     let nameQuality: Int
-}
-
-private func rawTarget(for heightCm: Double, baseHeight: Double) -> UInt16? {
-    let raw = ((heightCm - baseHeight) * 100).rounded()
-    guard raw >= 0, raw <= Double(UInt16.max) else { return nil }
-    return UInt16(raw)
-}
-
-private func decodeReading(_ data: Data, baseHeight: Double) -> Reading? {
-    guard data.count >= 4 else { return nil }
-    let rawHeight = UInt16(data[0]) | UInt16(data[1]) << 8
-    let rawSpeedBits = UInt16(data[2]) | UInt16(data[3]) << 8
-    let rawSpeed = Int16(bitPattern: rawSpeedBits)
-    return Reading(
-        heightCm: baseHeight + Double(rawHeight) / 100,
-        speed: Double(rawSpeed) / 100
-    )
-}
-
-private func littleEndianData(_ value: UInt16) -> Data {
-    Data([UInt8(value & 0x00ff), UInt8((value & 0xff00) >> 8)])
-}
-
-private func isDiscoveryCandidate(
-    peripheralName: String?,
-    advertisedName: String?,
-    advertisedServices: [CBUUID],
-    nameFilter: String
-) -> Bool {
-    if [peripheralName, advertisedName]
-        .compactMap({ $0 })
-        .contains(where: { $0.localizedCaseInsensitiveContains(nameFilter) })
-    {
-        return true
-    }
-    return advertisedServices.contains(controlServiceUUID)
-}
-
-private func nudgedTarget(
-    currentHeight: Double,
-    delta: Double,
-    minimumHeight: Double,
-    maximumHeight: Double
-) -> Double? {
-    let proposed = currentHeight + delta
-    let clamped = min(max(proposed, minimumHeight), maximumHeight)
-    if delta > 0, clamped < currentHeight { return nil }
-    if delta < 0, clamped > currentHeight { return nil }
-    return clamped
 }
 
 private func parseOptions(_ arguments: [String]) throws -> Options {
@@ -310,9 +250,8 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
     private var cancellationTimer: Timer?
     private var targetHeight: Double?
     private var targetRaw: UInt16?
-    private var lastReading: Reading?
-    private var stableTargetReadings = 0
-    private var stationaryReadings = 0
+    private var lastReading: DeskReading?
+    private var movementEvaluator: DeskMovementEvaluator?
     private var movementStartedAt: Date?
     private var pendingControlWrites: [ControlWritePurpose] = []
     private var finalStopPending = false
@@ -409,7 +348,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             emitDiscoveredDesk(rememberedDesk, connected: rememberedDesk.state == .connected)
         }
 
-        for connectedDesk in central.retrieveConnectedPeripherals(withServices: [controlServiceUUID]) {
+        for connectedDesk in central.retrieveConnectedPeripherals(withServices: [DeskProtocol.controlServiceUUID]) {
             emitDiscoveredDesk(connectedDesk, connected: true)
         }
 
@@ -427,7 +366,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             }
         }
 
-        let connected = central.retrieveConnectedPeripherals(withServices: [controlServiceUUID])
+        let connected = central.retrieveConnectedPeripherals(withServices: [DeskProtocol.controlServiceUUID])
         if let connectedDesk = connected.first(where: matchesDesk) {
             connect(connectedDesk)
             return
@@ -529,7 +468,11 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
 
     func centralManager(_ central: CBCentralManager, didConnect peripheral: CBPeripheral) {
         peripheral.delegate = self
-        peripheral.discoverServices([controlServiceUUID, outputServiceUUID, inputServiceUUID])
+        peripheral.discoverServices([
+            DeskProtocol.controlServiceUUID,
+            DeskProtocol.outputServiceUUID,
+            DeskProtocol.inputServiceUUID,
+        ])
     }
 
     func centralManager(_ central: CBCentralManager, didFailToConnect peripheral: CBPeripheral, error: Error?) {
@@ -552,12 +495,12 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
         for service in services {
             switch service.uuid {
-            case controlServiceUUID:
-                peripheral.discoverCharacteristics([controlCharacteristicUUID], for: service)
-            case outputServiceUUID:
-                peripheral.discoverCharacteristics([outputCharacteristicUUID], for: service)
-            case inputServiceUUID:
-                peripheral.discoverCharacteristics([inputCharacteristicUUID], for: service)
+            case DeskProtocol.controlServiceUUID:
+                peripheral.discoverCharacteristics([DeskProtocol.controlCharacteristicUUID], for: service)
+            case DeskProtocol.outputServiceUUID:
+                peripheral.discoverCharacteristics([DeskProtocol.outputCharacteristicUUID], for: service)
+            case DeskProtocol.inputServiceUUID:
+                peripheral.discoverCharacteristics([DeskProtocol.inputCharacteristicUUID], for: service)
             default:
                 break
             }
@@ -571,11 +514,11 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
         for characteristic in service.characteristics ?? [] {
             switch characteristic.uuid {
-            case controlCharacteristicUUID:
+            case DeskProtocol.controlCharacteristicUUID:
                 controlCharacteristic = characteristic
-            case outputCharacteristicUUID:
+            case DeskProtocol.outputCharacteristicUUID:
                 outputCharacteristic = characteristic
-            case inputCharacteristicUUID:
+            case DeskProtocol.inputCharacteristicUUID:
                 inputCharacteristic = characteristic
             default:
                 break
@@ -690,7 +633,7 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
     }
 
-    private func beginMovement(to requestedHeight: Double, from reading: Reading) {
+    private func beginMovement(to requestedHeight: Double, from reading: DeskReading) {
         if movementWasReplaced() {
             stopAndComplete(outcome: "stopped")
             return
@@ -705,9 +648,10 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         }
         targetHeight = requestedHeight
         self.targetRaw = targetRaw
+        movementEvaluator = DeskMovementEvaluator(targetHeight: requestedHeight)
         movementStartedAt = Date()
 
-        if abs(reading.heightCm - requestedHeight) <= 0.25 {
+        if abs(reading.heightCm - requestedHeight) <= DeskProtocol.targetToleranceCm {
             stopAndComplete(outcome: "reached")
             return
         }
@@ -716,11 +660,24 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
             fail("Desk movement controls are unavailable.")
             return
         }
-        writeControl(Data([0xfe, 0x00]), purpose: .movementSetup, peripheral: peripheral, characteristic: controlCharacteristic)
-        writeControl(Data([0xff, 0x00]), purpose: .movementSetup, peripheral: peripheral, characteristic: controlCharacteristic)
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
+        writeControl(
+            DeskProtocol.wakePayload,
+            purpose: .movementSetup,
+            peripheral: peripheral,
+            characteristic: controlCharacteristic
+        )
+        writeControl(
+            DeskProtocol.stopPayload,
+            purpose: .movementSetup,
+            peripheral: peripheral,
+            characteristic: controlCharacteristic
+        )
+        DispatchQueue.main.asyncAfter(deadline: .now() + DeskProtocol.movementSetupDelay) { [weak self] in
             self?.sendTarget()
-            self?.movementTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { [weak self] _ in
+            self?.movementTimer = Timer.scheduledTimer(
+                withTimeInterval: DeskProtocol.targetWriteInterval,
+                repeats: true
+            ) { [weak self] _ in
                 self?.sendTarget()
             }
         }
@@ -744,29 +701,18 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         peripheral.readValue(for: outputCharacteristic)
     }
 
-    private func evaluateMovement(_ reading: Reading, previous: Reading?) {
-        guard let targetHeight else { return }
-        if abs(reading.heightCm - targetHeight) <= 0.25 {
-            stableTargetReadings += 1
-        } else {
-            stableTargetReadings = 0
-        }
-        if stableTargetReadings >= 2 {
+    private func evaluateMovement(_ reading: DeskReading, previous: DeskReading?) {
+        guard var movementEvaluator, let targetHeight else { return }
+        let elapsed = movementStartedAt.map { Date().timeIntervalSince($0) } ?? 0
+        let evaluation = movementEvaluator.evaluate(reading, previous: previous, elapsed: elapsed)
+        self.movementEvaluator = movementEvaluator
+        switch evaluation {
+        case .reached:
             stopAndComplete(outcome: "reached")
-            return
-        }
-
-        if let previous,
-           abs(previous.heightCm - reading.heightCm) < 0.01,
-           abs(reading.speed) < 0.01,
-           movementStartedAt.map({ Date().timeIntervalSince($0) > 2 }) == true
-        {
-            stationaryReadings += 1
-        } else {
-            stationaryReadings = 0
-        }
-        if stationaryReadings >= 5 {
+        case .stalled:
             fail("The desk stopped before reaching \(rounded(targetHeight)) cm. Check for an obstruction.")
+        case .moving:
+            break
         }
     }
 
@@ -806,18 +752,23 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
                 self.fail("The desk did not acknowledge the stop command.")
             }
             stopCompletionWorkItem = workItem
-            writeControl(Data([0xff, 0x00]), purpose: .finalStop(outcome), peripheral: peripheral, characteristic: controlCharacteristic)
+            writeControl(
+                DeskProtocol.stopPayload,
+                purpose: .finalStop(outcome),
+                peripheral: peripheral,
+                characteristic: controlCharacteristic
+            )
             DispatchQueue.main.asyncAfter(deadline: .now() + 1, execute: workItem)
         } else {
             finishing = true
-            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: type)
+            peripheral.writeValue(DeskProtocol.stopPayload, for: controlCharacteristic, type: type)
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
                 self?.complete(outcome: outcome, reading: self?.lastReading, alreadyFinishing: true)
             }
         }
     }
 
-    private func complete(outcome: String?, reading: Reading?, alreadyFinishing: Bool = false) {
+    private func complete(outcome: String?, reading: DeskReading?, alreadyFinishing: Bool = false) {
         guard !finishing || alreadyFinishing else { return }
         finishing = true
         movementTimer?.invalidate()
@@ -849,7 +800,11 @@ private final class DeskClient: NSObject, CBCentralManagerDelegate, CBPeripheral
         stopCompletionWorkItem?.cancel()
         finalStopPending = false
         if let peripheral, let controlCharacteristic, options.operation.isMovement {
-            peripheral.writeValue(Data([0xff, 0x00]), for: controlCharacteristic, type: writeType(for: controlCharacteristic))
+            peripheral.writeValue(
+                DeskProtocol.stopPayload,
+                for: controlCharacteristic,
+                type: writeType(for: controlCharacteristic)
+            )
         }
         emit(["event": "error", "message": message])
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { [weak self] in
@@ -957,15 +912,53 @@ private func emit(_ payload: [String: Any]) {
 }
 
 private func runSelfTests() -> Bool {
+    guard DeskProtocol.controlServiceUUID == CBUUID(string: "99FA0001-338A-1024-8A49-009C0215F78A") else {
+        return false
+    }
+    guard DeskProtocol.wakePayload == Data([0xfe, 0x00]) else { return false }
+    guard DeskProtocol.stopPayload == Data([0xff, 0x00]) else { return false }
     guard rawTarget(for: 70, baseHeight: 62) == 800 else { return false }
     guard rawTarget(for: 110, baseHeight: 62) == 4_800 else { return false }
     guard rawTarget(for: 61, baseHeight: 62) == nil else { return false }
+    guard rawTarget(for: .nan, baseHeight: 62) == nil else { return false }
 
     let data = Data([0x20, 0x03, 0x9c, 0xff])
     guard let reading = decodeReading(data, baseHeight: 62) else { return false }
     guard abs(reading.heightCm - 70) < 0.001 else { return false }
     guard abs(reading.speed - (-1)) < 0.001 else { return false }
+    guard decodeReading(Data([0x20, 0x03, 0x9c]), baseHeight: 62) == nil else { return false }
     guard littleEndianData(4_800) == Data([0xc0, 0x12]) else { return false }
+
+    let defaultConfiguration = DeskConfiguration.default
+    guard (try? defaultConfiguration.validated()) == defaultConfiguration else { return false }
+    guard (try? defaultConfiguration.validatedTarget(70.04)) == 70 else { return false }
+    guard (try? defaultConfiguration.validatedTarget(61.9)) == nil else { return false }
+    let fractionalMinimumConfiguration = DeskConfiguration(
+        deskName: "Desk",
+        baseHeight: 62,
+        minimumHeight: 62.04,
+        maximumHeight: 127,
+        stepHeight: 1
+    )
+    guard (try? fractionalMinimumConfiguration.validatedTarget(62.04)) == nil else { return false }
+    var invalidConfiguration = defaultConfiguration
+    invalidConfiguration.baseHeight = 63
+    guard (try? invalidConfiguration.validated()) == nil else { return false }
+
+    var targetEvaluator = DeskMovementEvaluator(targetHeight: 70)
+    let nearTarget = DeskReading(heightCm: 69.8, speed: 0.1)
+    guard targetEvaluator.evaluate(nearTarget, previous: nil, elapsed: 1) == .moving else { return false }
+    guard targetEvaluator.evaluate(nearTarget, previous: nearTarget, elapsed: 1.1) == .reached else { return false }
+
+    var stallEvaluator = DeskMovementEvaluator(targetHeight: 110)
+    let stationary = DeskReading(heightCm: 70, speed: 0)
+    for _ in 0..<(DeskProtocol.stationaryReadingsBeforeStall - 1) {
+        guard stallEvaluator.evaluate(stationary, previous: stationary, elapsed: 3) == .moving else {
+            return false
+        }
+    }
+    guard stallEvaluator.evaluate(stationary, previous: stationary, elapsed: 3) == .stalled else { return false }
+
     guard (try? parseOptions(["discover", "--discovery-timeout", "1"]))?.operation.isDiscovery == true else {
         return false
     }
@@ -979,7 +972,7 @@ private func runSelfTests() -> Bool {
     guard isDiscoveryCandidate(
         peripheralName: "Office",
         advertisedName: nil,
-        advertisedServices: [controlServiceUUID],
+        advertisedServices: [DeskProtocol.controlServiceUUID],
         nameFilter: "desk"
     ) else { return false }
     guard !isDiscoveryCandidate(
@@ -1069,25 +1062,30 @@ private func runSelfTests() -> Bool {
     return true
 }
 
-do {
-    let options = try parseOptions(Array(CommandLine.arguments.dropFirst()))
-    switch options.operation {
-    case .selfTest:
-        if runSelfTests() {
-            emit(["event": "complete", "message": "Native protocol self-tests passed."])
+@main
+private enum DeskBLECommand {
+    static func main() {
+        do {
+            let options = try parseOptions(Array(CommandLine.arguments.dropFirst()))
+            switch options.operation {
+            case .selfTest:
+                if runSelfTests() {
+                    emit(["event": "complete", "message": "Native protocol self-tests passed."])
+                    Darwin.exit(0)
+                } else {
+                    emit(["event": "error", "message": "Native protocol self-tests failed."])
+                    Darwin.exit(1)
+                }
+            default:
+                let client = try DeskClient(options: options)
+                client.start()
+            }
+        } catch MovementLockError.superseded {
+            emit(["event": "complete", "connected": false, "outcome": "stopped"])
             Darwin.exit(0)
-        } else {
-            emit(["event": "error", "message": "Native protocol self-tests failed."])
+        } catch {
+            emit(["event": "error", "message": error.localizedDescription])
             Darwin.exit(1)
         }
-    default:
-        let client = try DeskClient(options: options)
-        client.start()
     }
-} catch MovementLockError.superseded {
-    emit(["event": "complete", "connected": false, "outcome": "stopped"])
-    Darwin.exit(0)
-} catch {
-    emit(["event": "error", "message": error.localizedDescription])
-    Darwin.exit(1)
 }
