@@ -2,8 +2,8 @@ import Combine
 import UIKit
 
 enum DeskQuickAction: String, CaseIterable, Equatable {
-    case sit = "com.cristian.standingdesk.sit"
-    case stand = "com.cristian.standingdesk.stand"
+    case sit = "com.salsaparapizza.standingdesk.sit"
+    case stand = "com.salsaparapizza.standingdesk.stand"
 
     var appAction: DeskAppAction {
         switch self {

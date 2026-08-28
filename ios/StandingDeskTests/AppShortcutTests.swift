@@ -3,8 +3,8 @@ import XCTest
 
 final class AppShortcutTests: XCTestCase {
     func testQuickActionTypesRemainStable() {
-        XCTAssertEqual(DeskQuickAction.sit.rawValue, "com.cristian.standingdesk.sit")
-        XCTAssertEqual(DeskQuickAction.stand.rawValue, "com.cristian.standingdesk.stand")
+        XCTAssertEqual(DeskQuickAction.sit.rawValue, "com.salsaparapizza.standingdesk.sit")
+        XCTAssertEqual(DeskQuickAction.stand.rawValue, "com.salsaparapizza.standingdesk.stand")
     }
 
     func testQuickActionsMapToMovementPresets() {
@@ -20,7 +20,7 @@ final class AppShortcutTests: XCTestCase {
     }
 
     func testUnknownQuickActionIsRejected() {
-        XCTAssertNil(DeskQuickAction(rawValue: "com.cristian.standingdesk.unknown"))
+        XCTAssertNil(DeskQuickAction(rawValue: "com.salsaparapizza.standingdesk.unknown"))
     }
 
     @MainActor func testHandlerQueuesAndConsumesKnownAction() {

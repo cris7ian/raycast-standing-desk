@@ -167,3 +167,15 @@ npm run publish
 ```
 
 Running the command again updates the existing open Store pull request.
+
+## iPhone App Store web pages
+
+The iPhone bundle identifier is `com.salsaparapizza.standingdesk`.
+
+Privacy and support pages use a private S3 bucket behind CloudFront at `standingdesk.salsaparapizza.com`. Publish them with the `personal` AWS profile:
+
+```sh
+scripts/publish-app-store-pages.sh
+```
+
+The command uploads `app-store-release-prep/web/index.html`, `privacy.html`, and `support.html`. It invalidates the matching CloudFront distribution without deleting bucket objects.
