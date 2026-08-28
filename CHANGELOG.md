@@ -2,6 +2,7 @@
 
 - Localize the iPhone app in Spanish, French, Italian, and German.
 - Add localized Sit and Stand quick actions to the iPhone Home Screen icon.
+- Add localized Siri and Shortcuts actions for Sit, Stand, Stop, and height status.
 - Add a native iPhone controller with compact Sit, Stand, Raise, Lower, Stop, save-position, refresh, and settings controls.
 - Share protocol, validation, and movement evaluation between the macOS helper and iPhone app.
 - Persist iPhone desk selection and the one-time safety acknowledgement across launches and settings changes.

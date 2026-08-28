@@ -38,7 +38,7 @@ enum DeskConnectionState: Equatable {
     }
 }
 
-enum PendingMovement {
+enum PendingMovement: Equatable {
     case sit
     case stand
     case nudge(Double)

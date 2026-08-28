@@ -1,3 +1,4 @@
+import AppIntents
 import SwiftUI
 import UIKit
 
@@ -40,6 +41,7 @@ struct SettingsView: View {
             presetsSection
             limitsSection
             resetSection
+            siriSection
             safetySection
             creditsSection
         }
@@ -193,6 +195,18 @@ struct SettingsView: View {
             Label("Keep the physical controller within reach.", systemImage: "hand.raised.fill")
             Label("The app sends Stop when it becomes inactive.", systemImage: "stop.fill")
             Label("Movement stops after 45 seconds or a detected stall.", systemImage: "timer")
+        }
+    }
+
+    private var siriSection: some View {
+        Section("Siri & Shortcuts") {
+            Text("Use Siri or Shortcuts to move to Sit or Stand, stop the desk, and check its height.")
+                .foregroundStyle(.secondary)
+            Text("Siri opens this app in the foreground and requires the iPhone to be unlocked.")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+            ShortcutsLink()
+                .shortcutsLinkStyle(.automaticOutline)
         }
     }
 

@@ -12,6 +12,7 @@ struct StandingDeskApp: App {
         let settingsStore = DeskSettingsStore()
         _settingsStore = StateObject(wrappedValue: settingsStore)
         _bluetooth = StateObject(wrappedValue: DeskBluetoothController(settingsStore: settingsStore))
+        StandingDeskSiriShortcuts.updateAppShortcutParameters()
     }
 
     var body: some Scene {

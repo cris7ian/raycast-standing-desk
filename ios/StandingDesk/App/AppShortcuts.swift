@@ -5,10 +5,10 @@ enum DeskQuickAction: String, CaseIterable, Equatable {
     case sit = "com.cristian.standingdesk.sit"
     case stand = "com.cristian.standingdesk.stand"
 
-    var movement: PendingMovement {
+    var appAction: DeskAppAction {
         switch self {
-        case .sit: .sit
-        case .stand: .stand
+        case .sit: .move(.sit)
+        case .stand: .move(.stand)
         }
     }
 
@@ -41,18 +41,22 @@ enum DeskQuickAction: String, CaseIterable, Equatable {
 final class AppShortcutHandler: ObservableObject {
     static let shared = AppShortcutHandler()
 
-    @Published private(set) var pendingAction: DeskQuickAction?
+    @Published private(set) var pendingAction: DeskAppAction?
 
     private init() {}
 
     @discardableResult
     func queue(_ shortcutItem: UIApplicationShortcutItem) -> Bool {
         guard let action = DeskQuickAction(rawValue: shortcutItem.type) else { return false }
-        pendingAction = action
+        pendingAction = action.appAction
         return true
     }
 
-    func consumePendingAction() -> DeskQuickAction? {
+    func queue(_ action: DeskAppAction) {
+        pendingAction = action
+    }
+
+    func consumePendingAction() -> DeskAppAction? {
         defer { pendingAction = nil }
         return pendingAction
     }

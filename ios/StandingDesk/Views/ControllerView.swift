@@ -292,7 +292,16 @@ struct ControllerView: View {
             bluetooth.alertMessage = appString("Select a desk in Settings first.")
             return true
         }
-        requestMovement(action.movement)
+        switch action {
+        case let .move(movement):
+            requestMovement(movement)
+        case .stop:
+            pendingMovement = nil
+            showingSafety = false
+            bluetooth.stop()
+        case .refreshHeight:
+            bluetooth.refreshStatus()
+        }
         return true
     }
 

@@ -1,0 +1,8 @@
+"Sit with ${applicationName}" = "M’asseoir avec ${applicationName}";
+"Move my desk to Sit with ${applicationName}" = "Mettre mon bureau en position assise avec ${applicationName}";
+"Stand with ${applicationName}" = "Me mettre debout avec ${applicationName}";
+"Move my desk to Stand with ${applicationName}" = "Mettre mon bureau en position debout avec ${applicationName}";
+"Stop my desk with ${applicationName}" = "Arrêter mon bureau avec ${applicationName}";
+"Stop ${applicationName}" = "Arrêter ${applicationName}";
+"Check my desk height with ${applicationName}" = "Vérifier la hauteur de mon bureau avec ${applicationName}";
+"What is my desk height in ${applicationName}" = "Quelle est la hauteur de mon bureau dans ${applicationName}";

@@ -8,13 +8,13 @@ final class AppShortcutTests: XCTestCase {
     }
 
     func testQuickActionsMapToMovementPresets() {
-        switch DeskQuickAction.sit.movement {
-        case .sit: break
+        switch DeskQuickAction.sit.appAction {
+        case .move(.sit): break
         default: XCTFail("Sit shortcut must map to the Sit preset")
         }
 
-        switch DeskQuickAction.stand.movement {
-        case .stand: break
+        switch DeskQuickAction.stand.appAction {
+        case .move(.stand): break
         default: XCTFail("Stand shortcut must map to the Stand preset")
         }
     }
@@ -28,8 +28,8 @@ final class AppShortcutTests: XCTestCase {
         _ = handler.consumePendingAction()
 
         XCTAssertTrue(handler.queue(DeskQuickAction.sit.shortcutItem))
-        XCTAssertEqual(handler.pendingAction, .sit)
-        XCTAssertEqual(handler.consumePendingAction(), .sit)
+        XCTAssertEqual(handler.pendingAction, .move(.sit))
+        XCTAssertEqual(handler.consumePendingAction(), .move(.sit))
         XCTAssertNil(handler.pendingAction)
     }
 

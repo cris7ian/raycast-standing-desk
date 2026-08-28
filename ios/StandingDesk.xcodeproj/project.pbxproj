@@ -24,6 +24,9 @@
 		C0000000000000000000000F /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000012 /* Localizable.strings */; };
 		C00000000000000000000010 /* InfoPlist.xcstrings in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000013 /* InfoPlist.xcstrings */; };
 		C00000000000000000000011 /* AppShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000014 /* AppShortcutTests.swift */; };
+		C00000000000000000000012 /* SiriIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000019 /* SiriIntents.swift */; };
+		C00000000000000000000013 /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001A /* AppShortcuts.strings */; };
+		C00000000000000000000014 /* SiriIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* SiriIntentTests.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -60,6 +63,12 @@
 		A00000000000000000000016 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A00000000000000000000017 /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A00000000000000000000018 /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/Localizable.strings; sourceTree = "<group>"; };
+		A00000000000000000000019 /* SiriIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiriIntents.swift; sourceTree = "<group>"; };
+		A0000000000000000000001B /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
+		A0000000000000000000001C /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
+		A0000000000000000000001D /* fr */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = fr; path = fr.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
+		A0000000000000000000001E /* it */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = it; path = it.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
+		A0000000000000000000001F /* SiriIntentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SiriIntentTests.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -110,6 +119,7 @@
 			children = (
 				A00000000000000000000010 /* AppLocalization.swift */,
 				A00000000000000000000011 /* AppShortcuts.swift */,
+				A00000000000000000000019 /* SiriIntents.swift */,
 				A00000000000000000000001 /* StandingDeskApp.swift */,
 			);
 			path = App;
@@ -155,6 +165,7 @@
 				A00000000000000000000014 /* AppShortcutTests.swift */,
 				A0000000000000000000000A /* DeskMovementPolicyTests.swift */,
 				A0000000000000000000000B /* DeskSettingsStoreTests.swift */,
+				A0000000000000000000001F /* SiriIntentTests.swift */,
 			);
 			path = StandingDeskTests;
 			sourceTree = "<group>";
@@ -187,6 +198,7 @@
 		B0000000000000000000000C /* Resources */ = {
 			isa = PBXGroup;
 			children = (
+				A0000000000000000000001A /* AppShortcuts.strings */,
 				A0000000000000000000000F /* Info.plist */,
 				A00000000000000000000013 /* InfoPlist.xcstrings */,
 				A00000000000000000000012 /* Localizable.strings */,
@@ -280,6 +292,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				C00000000000000000000009 /* Assets.xcassets in Resources */,
+				C00000000000000000000013 /* AppShortcuts.strings in Resources */,
 				C00000000000000000000010 /* InfoPlist.xcstrings in Resources */,
 				C0000000000000000000000F /* Localizable.strings in Resources */,
 			);
@@ -294,6 +307,7 @@
 			files = (
 				C0000000000000000000000D /* AppLocalization.swift in Sources */,
 				C0000000000000000000000E /* AppShortcuts.swift in Sources */,
+				C00000000000000000000012 /* SiriIntents.swift in Sources */,
 				C00000000000000000000001 /* StandingDeskApp.swift in Sources */,
 				C00000000000000000000002 /* DeskModels.swift in Sources */,
 				C00000000000000000000003 /* DeskSettingsStore.swift in Sources */,
@@ -312,12 +326,24 @@
 				C00000000000000000000011 /* AppShortcutTests.swift in Sources */,
 				C0000000000000000000000A /* DeskMovementPolicyTests.swift in Sources */,
 				C0000000000000000000000B /* DeskSettingsStoreTests.swift in Sources */,
+				C00000000000000000000014 /* SiriIntentTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXVariantGroup section */
+		A0000000000000000000001A /* AppShortcuts.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				A0000000000000000000001B /* de */,
+				A0000000000000000000001C /* es */,
+				A0000000000000000000001D /* fr */,
+				A0000000000000000000001E /* it */,
+			);
+			name = AppShortcuts.strings;
+			sourceTree = "<group>";
+		};
 		A00000000000000000000012 /* Localizable.strings */ = {
 			isa = PBXVariantGroup;
 			children = (
