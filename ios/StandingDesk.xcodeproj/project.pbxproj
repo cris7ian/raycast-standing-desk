@@ -27,6 +27,7 @@
 		C00000000000000000000012 /* SiriIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000019 /* SiriIntents.swift */; };
 		C00000000000000000000013 /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001A /* AppShortcuts.strings */; };
 		C00000000000000000000014 /* SiriIntentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000001F /* SiriIntentTests.swift */; };
+		C00000000000000000000015 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000020 /* PrivacyInfo.xcprivacy */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -58,6 +59,7 @@
 		A00000000000000000000010 /* AppLocalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppLocalization.swift; sourceTree = "<group>"; };
 		A00000000000000000000011 /* AppShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcuts.swift; sourceTree = "<group>"; };
 		A00000000000000000000013 /* InfoPlist.xcstrings */ = {isa = PBXFileReference; lastKnownFileType = text.json.xcstrings; path = InfoPlist.xcstrings; sourceTree = "<group>"; };
+		A00000000000000000000020 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		A00000000000000000000014 /* AppShortcutTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppShortcutTests.swift; sourceTree = "<group>"; };
 		A00000000000000000000015 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		A00000000000000000000016 /* es */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = es; path = es.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -201,6 +203,7 @@
 				A0000000000000000000001A /* AppShortcuts.strings */,
 				A0000000000000000000000F /* Info.plist */,
 				A00000000000000000000013 /* InfoPlist.xcstrings */,
+				A00000000000000000000020 /* PrivacyInfo.xcprivacy */,
 				A00000000000000000000012 /* Localizable.strings */,
 				A00000000000000000000009 /* Assets.xcassets */,
 			);
@@ -295,6 +298,7 @@
 				C00000000000000000000013 /* AppShortcuts.strings in Resources */,
 				C00000000000000000000010 /* InfoPlist.xcstrings in Resources */,
 				C0000000000000000000000F /* Localizable.strings in Resources */,
+				C00000000000000000000015 /* PrivacyInfo.xcprivacy in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

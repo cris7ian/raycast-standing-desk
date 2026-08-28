@@ -94,6 +94,8 @@ The app stores configuration, presets, selection generation, and the first-use s
 
 The safety acknowledgement persists for the app data lifetime. Desk selection and configuration changes do not present the checklist again.
 
+Settings links to the published privacy policy. The bundled privacy manifest declares the required-reason `UserDefaults` access and no collected or tracking data.
+
 ## Raycast movement sequence
 
 1. The bridge publishes a unique movement request identifier before it awaits desk-bound state.

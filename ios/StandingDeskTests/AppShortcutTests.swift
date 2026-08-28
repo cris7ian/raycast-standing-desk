@@ -35,18 +35,22 @@ final class AppShortcutTests: XCTestCase {
 
     func testSupportedLocalizationsAreBundled() throws {
         let expectedTranslations = [
-            "de": "Einstellungen",
-            "es": "Ajustes",
-            "fr": "Réglages",
-            "it": "Impostazioni",
+            "de": (settings: "Einstellungen", privacy: "Datenschutzrichtlinie"),
+            "es": (settings: "Ajustes", privacy: "Política de privacidad"),
+            "fr": (settings: "Réglages", privacy: "Politique de confidentialité"),
+            "it": (settings: "Impostazioni", privacy: "Informativa sulla privacy"),
         ]
 
-        for (language, expectedSettings) in expectedTranslations {
+        for (language, expected) in expectedTranslations {
             let path = try XCTUnwrap(Bundle.main.path(forResource: language, ofType: "lproj"))
             let bundle = try XCTUnwrap(Bundle(path: path))
             XCTAssertEqual(
                 bundle.localizedString(forKey: "Settings", value: nil, table: nil),
-                expectedSettings
+                expected.settings
+            )
+            XCTAssertEqual(
+                bundle.localizedString(forKey: "Privacy Policy", value: nil, table: nil),
+                expected.privacy
             )
             XCTAssertNotEqual(
                 bundle.localizedString(

@@ -43,6 +43,7 @@ struct SettingsView: View {
             resetSection
             siriSection
             safetySection
+            privacySection
             creditsSection
         }
         .background(KeyboardDismissInstaller())
@@ -218,6 +219,16 @@ struct SettingsView: View {
                 .frame(maxWidth: .infinity)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
+        }
+    }
+
+    private var privacySection: some View {
+        Section {
+            Link(
+                destination: URL(string: "https://standingdesk.salsaparapizza.com/privacy.html")!
+            ) {
+                Label("Privacy Policy", systemImage: "hand.raised")
+            }
         }
     }
 
