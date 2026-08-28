@@ -40,7 +40,6 @@ struct ControllerView: View {
                     positionsSection
                     adjustmentSection
                     utilitySection
-                    footerSection
                 }
                 .listStyle(.insetGrouped)
                 .listSectionSpacing(.compact)
@@ -233,17 +232,6 @@ struct ControllerView: View {
                     bluetooth.isRefreshingStatus ||
                     bluetooth.hasQueuedOrActiveMovement
             )
-        }
-    }
-
-    private var footerSection: some View {
-        Section {
-            Text("built by Cristian E. Caroli 🍕")
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .listRowBackground(Color.clear)
-                .listRowSeparator(.hidden)
         }
     }
 

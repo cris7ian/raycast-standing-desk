@@ -41,6 +41,7 @@ struct SettingsView: View {
             limitsSection
             resetSection
             safetySection
+            creditsSection
         }
         .background(KeyboardDismissInstaller())
         .scrollDismissesKeyboard(.interactively)
@@ -192,6 +193,17 @@ struct SettingsView: View {
             Label("Keep the physical controller within reach.", systemImage: "hand.raised.fill")
             Label("The app sends Stop when it becomes inactive.", systemImage: "stop.fill")
             Label("Movement stops after 45 seconds or a detected stall.", systemImage: "timer")
+        }
+    }
+
+    private var creditsSection: some View {
+        Section {
+            Text("built by Cristian E. Caroli 🍕")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
         }
     }
 
