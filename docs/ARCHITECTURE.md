@@ -78,6 +78,8 @@ The macOS helper and iOS target compile the same file. Platform adapters remain 
 
 The system launch screen uses the shared black desk symbol centered on a fixed white background. The main toolbar loads the same vector asset.
 
+The app uses the iPhone language when it supports that language. It falls back to English for all other languages.
+
 The app localizes its interface, safety text, errors, Bluetooth privacy description, and quick actions in Spanish, French, Italian, and German.
 
 `AppShortcuts.swift` registers localized Sit and Stand Home Screen quick actions. The scene delegate queues cold-launch and connected-scene actions. `ControllerView` consumes them only while the scene is active, then uses the normal safety acknowledgement and movement path.
