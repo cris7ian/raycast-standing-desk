@@ -24,6 +24,7 @@ struct StandingDeskApp: App {
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .active {
+                settingsStore.recordAppForegroundDay()
                 if shortcutHandler.pendingAction == nil,
                    settingsStore.hasSelectedDesk,
                    bluetooth.connectionState != .scanning,

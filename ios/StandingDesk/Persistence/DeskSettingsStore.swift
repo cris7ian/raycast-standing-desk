@@ -9,6 +9,10 @@ struct StoredDeskSettings: Codable, Equatable {
     var configuration = DeskConfiguration.default
     var sitHeight = DeskConfiguration.defaultSitHeight
     var standHeight = DeskConfiguration.defaultStandHeight
+    var usedDayCount = 0
+    var lastUsedDayKey: String?
+    var completedMovementCount = 0
+    var reviewAskDecision: String?
 
     private enum CodingKeys: String, CodingKey {
         case selectedDeskID
@@ -19,6 +23,10 @@ struct StoredDeskSettings: Codable, Equatable {
         case configuration
         case sitHeight
         case standHeight
+        case usedDayCount
+        case lastUsedDayKey
+        case completedMovementCount
+        case reviewAskDecision
     }
 
     init() {}
@@ -39,6 +47,10 @@ struct StoredDeskSettings: Codable, Equatable {
         configuration = (try? values.decodeIfPresent(DeskConfiguration.self, forKey: .configuration)) ?? .default
         sitHeight = (try? values.decodeIfPresent(Double.self, forKey: .sitHeight)) ?? DeskConfiguration.defaultSitHeight
         standHeight = (try? values.decodeIfPresent(Double.self, forKey: .standHeight)) ?? DeskConfiguration.defaultStandHeight
+        usedDayCount = (try? values.decodeIfPresent(Int.self, forKey: .usedDayCount)) ?? 0
+        lastUsedDayKey = try? values.decodeIfPresent(String.self, forKey: .lastUsedDayKey)
+        completedMovementCount = (try? values.decodeIfPresent(Int.self, forKey: .completedMovementCount)) ?? 0
+        reviewAskDecision = try? values.decodeIfPresent(String.self, forKey: .reviewAskDecision)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -50,6 +62,40 @@ struct StoredDeskSettings: Codable, Equatable {
         try values.encode(configuration, forKey: .configuration)
         try values.encode(sitHeight, forKey: .sitHeight)
         try values.encode(standHeight, forKey: .standHeight)
+        try values.encode(usedDayCount, forKey: .usedDayCount)
+        try values.encodeIfPresent(lastUsedDayKey, forKey: .lastUsedDayKey)
+        try values.encode(completedMovementCount, forKey: .completedMovementCount)
+        try values.encodeIfPresent(reviewAskDecision, forKey: .reviewAskDecision)
+    }
+}
+
+enum ReviewPromptDecision: String {
+    case accepted
+    case declined
+}
+
+enum ReviewPromptPolicy {
+    static let minimumUsedDayCount = 5
+    static let minimumCompletedMovementCount = 10
+
+    static func shouldAsk(
+        usedDayCount: Int,
+        completedMovementCount: Int,
+        reviewAskDecision: String?
+    ) -> Bool {
+        guard reviewAskDecision == nil else { return false }
+        return usedDayCount >= minimumUsedDayCount
+            && completedMovementCount >= minimumCompletedMovementCount
+    }
+
+    static func dayKey(for date: Date = .now, calendar: Calendar = .current) -> String {
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        return String(
+            format: "%04d-%02d-%02d",
+            components.year ?? 0,
+            components.month ?? 0,
+            components.day ?? 0
+        )
     }
 }
 
@@ -145,6 +191,33 @@ final class DeskSettingsStore: ObservableObject {
         settings.configuration = .default
         settings.sitHeight = DeskConfiguration.defaultSitHeight
         settings.standHeight = DeskConfiguration.defaultStandHeight
+        persist()
+    }
+
+    var shouldAskForReview: Bool {
+        ReviewPromptPolicy.shouldAsk(
+            usedDayCount: settings.usedDayCount,
+            completedMovementCount: settings.completedMovementCount,
+            reviewAskDecision: settings.reviewAskDecision
+        )
+    }
+
+    func recordAppForegroundDay() {
+        let todayKey = ReviewPromptPolicy.dayKey()
+        guard settings.lastUsedDayKey != todayKey else { return }
+        settings.usedDayCount += 1
+        settings.lastUsedDayKey = todayKey
+        persist()
+    }
+
+    func recordCompletedMovement() {
+        settings.completedMovementCount += 1
+        persist()
+    }
+
+    func recordReviewPromptDecision(_ decision: ReviewPromptDecision) {
+        guard settings.reviewAskDecision == nil else { return }
+        settings.reviewAskDecision = decision.rawValue
         persist()
     }
 

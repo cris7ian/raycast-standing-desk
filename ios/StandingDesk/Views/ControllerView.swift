@@ -1,7 +1,10 @@
+import StoreKit
 import SwiftUI
+import UIKit
 
 struct ControllerView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.requestReview) private var requestReview
     @EnvironmentObject private var settingsStore: DeskSettingsStore
     @EnvironmentObject private var bluetooth: DeskBluetoothController
     @EnvironmentObject private var shortcutHandler: AppShortcutHandler
@@ -11,6 +14,8 @@ struct ControllerView: View {
     @State private var savedPresetMessage: String?
     @State private var saveFeedback = 0
     @State private var savedMessageTask: Task<Void, Never>?
+    @State private var showingReviewPrompt = false
+    @State private var reviewPromptTask: Task<Void, Never>?
 
     private enum PresetSlot {
         case sit
@@ -80,6 +85,20 @@ struct ControllerView: View {
             } message: {
                 Text(bluetooth.alertMessage ?? "")
             }
+            .alert(
+                appString("Enjoying the app?"),
+                isPresented: $showingReviewPrompt
+            ) {
+                Button(appString("Yes, I'll review")) {
+                    settingsStore.recordReviewPromptDecision(.accepted)
+                    requestReview()
+                }
+                Button(appString("No, thanks"), role: .cancel) {
+                    settingsStore.recordReviewPromptDecision(.declined)
+                }
+            } message: {
+                Text(appString("You can help with a review. We will only ask you this time."))
+            }
             .onAppear {
                 if handlePendingShortcut() { return }
                 if settingsStore.hasSelectedDesk,
@@ -95,6 +114,8 @@ struct ControllerView: View {
                 savedMessageTask?.cancel()
                 savedMessageTask = nil
                 savedPresetMessage = nil
+                reviewPromptTask?.cancel()
+                reviewPromptTask = nil
             }
             .onChange(of: bluetooth.settingsMutationState) { _, state in
                 handlePresetSave(state)
@@ -102,9 +123,13 @@ struct ControllerView: View {
             .onChange(of: shortcutHandler.pendingAction) {
                 handlePendingShortcut()
             }
+            .onChange(of: settingsStore.settings.completedMovementCount) { _, _ in
+                scheduleReviewPromptEvaluation()
+            }
             .onChange(of: scenePhase) { _, phase in
                 if phase == .active {
                     handlePendingShortcut()
+                    scheduleReviewPromptEvaluation()
                 }
             }
             .sensoryFeedback(.success, trigger: saveFeedback)
@@ -309,6 +334,32 @@ struct ControllerView: View {
 
     private func cancelPendingMovement() {
         pendingMovement = nil
+    }
+
+    private func scheduleReviewPromptEvaluation() {
+        reviewPromptTask?.cancel()
+        reviewPromptTask = Task { @MainActor in
+            do {
+                try await Task.sleep(for: .seconds(2))
+            } catch {
+                return
+            }
+            evaluateReviewPrompt()
+        }
+    }
+
+    private func evaluateReviewPrompt() {
+        guard UIApplication.shared.applicationState == .active,
+              shortcutHandler.pendingAction == nil,
+              settingsStore.hasSelectedDesk,
+              bluetooth.connectionState != .scanning,
+              bluetooth.settingsMutationState != .pending,
+              !bluetooth.isRefreshingStatus,
+              !bluetooth.hasQueuedOrActiveMovement,
+              bluetooth.alertMessage == nil,
+              settingsStore.shouldAskForReview
+        else { return }
+        showingReviewPrompt = true
     }
 
     private func executePendingMovement() {

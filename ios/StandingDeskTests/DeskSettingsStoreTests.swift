@@ -268,4 +268,172 @@ final class DeskSettingsStoreTests: XCTestCase {
         XCTAssertEqual(store.settings.sitHeight, 70.1)
         XCTAssertEqual(store.settings.standHeight, 70.1)
     }
+
+    @MainActor func testReviewPromptPolicyDoesNotAskBeforeFiveUsedDays() {
+        XCTAssertFalse(
+            ReviewPromptPolicy.shouldAsk(
+                usedDayCount: 4,
+                completedMovementCount: 10,
+                reviewAskDecision: nil
+            )
+        )
+    }
+
+    @MainActor func testReviewPromptPolicyDoesNotAskBeforeMovementThreshold() {
+        XCTAssertFalse(
+            ReviewPromptPolicy.shouldAsk(
+                usedDayCount: 5,
+                completedMovementCount: 9,
+                reviewAskDecision: nil
+            )
+        )
+    }
+
+    @MainActor func testReviewPromptPolicyAsksWhenThresholdsAreMet() {
+        XCTAssertTrue(
+            ReviewPromptPolicy.shouldAsk(
+                usedDayCount: 5,
+                completedMovementCount: 10,
+                reviewAskDecision: nil
+            )
+        )
+        XCTAssertTrue(
+            ReviewPromptPolicy.shouldAsk(
+                usedDayCount: 6,
+                completedMovementCount: 11,
+                reviewAskDecision: nil
+            )
+        )
+    }
+
+    @MainActor func testReviewPromptPolicyNeverAsksAfterDecision() {
+        for decision in [ReviewPromptDecision.accepted, .declined] {
+            XCTAssertFalse(
+                ReviewPromptPolicy.shouldAsk(
+                    usedDayCount: 5,
+                    completedMovementCount: 10,
+                    reviewAskDecision: decision.rawValue
+                )
+            )
+        }
+    }
+
+    @MainActor func testForegroundingCountsOneDayPerCalendarDay() {
+        let store = DeskSettingsStore(defaults: defaults)
+
+        store.recordAppForegroundDay()
+        store.recordAppForegroundDay()
+
+        XCTAssertEqual(store.settings.usedDayCount, 1)
+        XCTAssertEqual(store.settings.lastUsedDayKey, ReviewPromptPolicy.dayKey())
+
+        let relaunchedStore = DeskSettingsStore(defaults: defaults)
+        relaunchedStore.recordAppForegroundDay()
+
+        XCTAssertEqual(relaunchedStore.settings.usedDayCount, 1)
+    }
+
+    @MainActor func testForegroundingIncrementsWhenDayKeyChanges() throws {
+        var stored = StoredDeskSettings()
+        stored.usedDayCount = 4
+        stored.lastUsedDayKey = "1999-12-31"
+        defaults.set(try JSONEncoder().encode(stored), forKey: DeskSettingsStore.storageKey)
+
+        let store = DeskSettingsStore(defaults: defaults)
+        store.recordAppForegroundDay()
+
+        XCTAssertEqual(store.settings.usedDayCount, 5)
+        XCTAssertEqual(store.settings.lastUsedDayKey, ReviewPromptPolicy.dayKey())
+    }
+
+    @MainActor func testCompletedMovementsAreCountedAndPersisted() {
+        let store = DeskSettingsStore(defaults: defaults)
+        for _ in 0..<10 {
+            store.recordCompletedMovement()
+        }
+
+        XCTAssertEqual(store.settings.completedMovementCount, 10)
+
+        let relaunchedStore = DeskSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(relaunchedStore.settings.completedMovementCount, 10)
+    }
+
+    @MainActor func testAcceptedReviewDecisionSuppressesPromptPermanently() throws {
+        var stored = StoredDeskSettings()
+        stored.usedDayCount = 5
+        stored.completedMovementCount = 10
+        defaults.set(try JSONEncoder().encode(stored), forKey: DeskSettingsStore.storageKey)
+
+        let store = DeskSettingsStore(defaults: defaults)
+        XCTAssertTrue(store.shouldAskForReview)
+
+        store.recordReviewPromptDecision(.accepted)
+        XCTAssertFalse(store.shouldAskForReview)
+
+        let relaunchedStore = DeskSettingsStore(defaults: defaults)
+
+        XCTAssertFalse(relaunchedStore.shouldAskForReview)
+        XCTAssertEqual(relaunchedStore.settings.reviewAskDecision, ReviewPromptDecision.accepted.rawValue)
+    }
+
+    @MainActor func testDeclinedReviewDecisionSuppressesPromptPermanently() throws {
+        var stored = StoredDeskSettings()
+        stored.usedDayCount = 5
+        stored.completedMovementCount = 10
+        defaults.set(try JSONEncoder().encode(stored), forKey: DeskSettingsStore.storageKey)
+
+        let store = DeskSettingsStore(defaults: defaults)
+        XCTAssertTrue(store.shouldAskForReview)
+
+        store.recordReviewPromptDecision(.declined)
+        XCTAssertFalse(store.shouldAskForReview)
+
+        let relaunchedStore = DeskSettingsStore(defaults: defaults)
+
+        XCTAssertFalse(relaunchedStore.shouldAskForReview)
+        XCTAssertEqual(relaunchedStore.settings.reviewAskDecision, ReviewPromptDecision.declined.rawValue)
+    }
+
+    @MainActor func testReviewPromptDecisionIsRecordedOnlyOnce() {
+        let store = DeskSettingsStore(defaults: defaults)
+
+        store.recordReviewPromptDecision(.declined)
+        store.recordReviewPromptDecision(.accepted)
+
+        XCTAssertEqual(store.settings.reviewAskDecision, ReviewPromptDecision.declined.rawValue)
+    }
+
+    @MainActor func testMalformedReviewFieldsFallBackToDefaultsAndKeepDeskSelection() throws {
+        let deskID = UUID()
+        let data = try JSONSerialization.data(withJSONObject: [
+            "selectedDeskID": deskID.uuidString,
+            "selectedDeskName": "Desk",
+            "usedDayCount": "five",
+            "lastUsedDayKey": 7,
+            "completedMovementCount": ["ten"],
+            "reviewAskDecision": 42,
+        ])
+        defaults.set(data, forKey: DeskSettingsStore.storageKey)
+
+        let store = DeskSettingsStore(defaults: defaults)
+
+        XCTAssertEqual(store.settings.selectedDeskID, deskID)
+        XCTAssertEqual(store.settings.usedDayCount, 0)
+        XCTAssertNil(store.settings.lastUsedDayKey)
+        XCTAssertEqual(store.settings.completedMovementCount, 0)
+        XCTAssertNil(store.settings.reviewAskDecision)
+        XCTAssertFalse(store.shouldAskForReview)
+    }
+
+    @MainActor func testDayKeyReflectsCalendarDay() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(identifier: "UTC"))
+
+        let beforeMidnight = Date(timeIntervalSince1970: 1_767_225_599)
+        let afterMidnight = Date(timeIntervalSince1970: 1_767_225_601)
+
+        XCTAssertEqual(ReviewPromptPolicy.dayKey(for: beforeMidnight, calendar: calendar), "2025-12-31")
+        XCTAssertEqual(ReviewPromptPolicy.dayKey(for: afterMidnight, calendar: calendar), "2026-01-01")
+    }
 }

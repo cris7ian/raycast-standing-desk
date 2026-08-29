@@ -815,6 +815,7 @@ final class DeskBluetoothController: NSObject, ObservableObject {
         case .moving:
             break
         case .reached:
+            settingsStore.recordCompletedMovement()
             invalidateActiveOperation()
             startFinalStop()
         case .stalled:

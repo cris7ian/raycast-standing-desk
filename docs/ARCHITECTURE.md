@@ -94,6 +94,8 @@ The app stores configuration, presets, selection generation, and the first-use s
 
 The safety acknowledgement persists for the app data lifetime. Desk selection and configuration changes do not present the checklist again.
 
+The app counts foregrounded calendar days and successful desk movements, and stores the outcome of the one-time App Store review ask. After five used days and ten completed movements, it shows a custom "Enjoying the app?" dialog while the desk is idle. Accepting triggers the native StoreKit review prompt; declining stores the decision. Either answer suppresses the ask for the app data lifetime, and the dialog never appears while movement, a final Stop, a settings mutation, or a status refresh is pending.
+
 Settings links to the published privacy policy. The bundled privacy manifest declares the required-reason `UserDefaults` access and no collected or tracking data.
 
 ## Raycast movement sequence
