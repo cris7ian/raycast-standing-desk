@@ -134,7 +134,7 @@ Do not accept a major API update only because npm reports it as latest. Confirm 
 
 GitHub Actions runs the Raycast and iPhone offline verification suites for pushes and pull requests. CI does not have a desk and must never attempt Bluetooth discovery.
 
-## GitHub release
+## Raycast GitHub release
 
 The `VERSION` file defines the release version. Before creating a release, update `VERSION` and `CHANGELOG.md`. Create an annotated tag named `v` followed by that version. Pushing the tag starts the release workflow.
 
@@ -149,6 +149,16 @@ scripts/package-release.sh "$(tr -d '[:space:]' < VERSION)" release
 Run local packaging from a clean worktree. The script rejects dirty worktrees and version mismatches so the source archive and bundle represent the same commit.
 
 The source archive is the supported local installation route. Extract it, run `npm ci && npm run dev`, and keep the source directory available to Raycast. The prebuilt bundle is a release artifact. It does not replace the Raycast local-extension workflow.
+
+## iPhone App Store release tracking
+
+Track Raycast and iPhone releases independently. Reserve `v<VERSION>` tags for Raycast releases. Tag each submitted iPhone build as `ios-v<MARKETING_VERSION>-build<CURRENT_PROJECT_VERSION>`.
+
+Create the iPhone archive from a clean worktree. Record `git rev-parse HEAD` when archiving because an Xcode archive does not contain the Git commit by default. Point the release tag to that exact commit.
+
+Create a GitHub prerelease while the build waits for App Review. Set `latest` to false so the iPhone prerelease does not replace the latest Raycast release. Record the App Store version, build number, review state, archive time, and source commit in the release notes.
+
+Increment `CURRENT_PROJECT_VERSION` before uploading a changed binary for the same App Store version. Change `MARKETING_VERSION` when creating a new App Store version. After Apple approves the build, update its GitHub release from prerelease to release.
 
 ## Raycast Store release
 
