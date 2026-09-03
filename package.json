@@ -2,10 +2,8 @@
   "$schema": "https://www.raycast.com/schemas/extension.json",
   "name": "standing-desk",
   "title": "Standing Desk",
-  "description": "Control an IKEA IDÅSEN standing desk over Bluetooth",
+  "description": "Control a compatible standing desk over Bluetooth",
   "keywords": [
-    "IKEA",
-    "IDÅSEN",
     "standing desk",
     "LINAK",
     "Bluetooth"
