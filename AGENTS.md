@@ -2,13 +2,9 @@
 
 ## Scope
 
-This repository contains a Raycast extension, a native macOS Bluetooth helper, and a native iPhone app for IKEA IDÅSEN desks.
+This repository contains a Raycast extension, a native macOS Bluetooth helper, and a native iPhone app for standing desks.
 
 Read `docs/ARCHITECTURE.md` before changing component boundaries. Read `docs/SAFETY.md` before changing movement behavior.
-
-## Product naming
-
-The public extension name is **Standing Desk**. Use **IKEA IDÅSEN** only for verified hardware compatibility. Do not rename the extension to IDÅSEN Desk.
 
 ## Safety rules
 

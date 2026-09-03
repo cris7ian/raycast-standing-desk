@@ -2,7 +2,7 @@
 
 ## Scope
 
-The native helper implements the LINAK Bluetooth characteristics used by the IKEA IDÅSEN controller. Compatible LINAK desks can work, but only IDÅSEN hardware has been verified.
+The native helper implements the LINAK Bluetooth characteristics used by compatible desk controllers.
 
 ## Characteristics
 
@@ -67,5 +67,4 @@ Treat protocol changes as safety-sensitive.
 ## References
 
 - [linak-desk-web protocol implementation](https://github.com/smailzhu/linak-desk-web)
-- [IDÅSEN Desk Controller for Mac](https://github.com/DWilliames/idasen-desk-controller-mac)
 - [Apple CoreBluetooth documentation](https://developer.apple.com/documentation/corebluetooth)

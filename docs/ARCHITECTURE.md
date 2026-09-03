@@ -13,7 +13,7 @@ flowchart LR
     UI --> Runner[Native process runner]
     Runner --> Helper[Swift deskctl helper]
     Helper --> CoreBluetooth[Apple CoreBluetooth]
-    CoreBluetooth --> Desk[IKEA IDASEN desk]
+    CoreBluetooth --> Desk[Standing desk]
     UI <--> Storage[Raycast LocalStorage]
     UI --> StopFile[Stop request file]
     Helper --> StopFile

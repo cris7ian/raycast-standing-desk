@@ -1,6 +1,6 @@
 # <img src="assets/standing-desk-icon.png" width="32" alt="" /> Standing Desk
 
-Control an IKEA IDÅSEN standing desk from Raycast or iPhone through Bluetooth Low Energy (BLE) instead of using your fingers like an animal.
+Control a compatible standing desk from Raycast or iPhone through Bluetooth Low Energy (BLE) instead of using your fingers like an animal.
 
 The extension has a bunch of features like getting the current height, stores Sit and Stand positions, moves to a target height, and stops active movement. Use it from Raycast search or as a persistent menu-bar control. Sit defaults to `70 cm`. Stand defaults to `110 cm`. Yes, it moves the desk up and down.
 
@@ -30,7 +30,7 @@ The management view also supports a custom target height, settings, diagnostics,
 
 - macOS with Bluetooth enabled.
 - [Raycast](https://www.raycast.com/).
-- An IKEA IDÅSEN or compatible LINAK desk controller. (important)
+- A compatible LINAK desk controller. (important)
 
 ## Install
 
@@ -117,7 +117,6 @@ These checks do not move the physical desk.
 ## Protocol references
 
 - [linak-desk-web](https://github.com/smailzhu/linak-desk-web)
-- [idasen-desk-controller-mac](https://github.com/DWilliames/idasen-desk-controller-mac)
 
 ## License
 
